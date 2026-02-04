@@ -1,0 +1,51 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Language: English
+  Produce all artifacts (proposal/tasks/spec/design) in English.
+
+  Keep the following in their original form (do not translate):
+  - Code, commands, file paths, identifiers, and error messages
+  - Technical terms (e.g., API, TUI, Bubble Tea, Bubbles, Lip Gloss, JSON, CSV, UUID)
+
+  Additional rules:
+  - At the top of each artifact, write a 3–5 line summary in English.
+
+  Project: Kanji Boxes (Bubble Tea)
+  Domain: Offline-first Japanese kanji flashcard trainer with a 5-box Leitner SRS.
+  Scheduling: Reviews are due on an interval equal to the card's box number in days (1–5).
+  Storage: Local JSON file for cards/state; CSV import/export for content interchange.
+
+  Codebase / stack:
+  - Language: Go (latest stable), modules enabled
+  - TUI: Bubble Tea + Bubbles + Lip Gloss
+  - Storage: local filesystem (atomic write via temp file + rename)
+  - Testing: Go test (unit tests for scheduling/movement); optionally add golden tests for views
+
+  Code style / conventions:
+  - Prefer clear, small types and functions.
+  - Keep SRS logic pure and testable (no direct IO in scheduling/movement functions).
+  - Separate concerns:
+    - model: Bubble Tea state/update logic
+    - ui/view: rendering with Lip Gloss
+    - domain: Card, scheduling, movement rules
+    - storage: JSON read/write, CSV import/export
+  - Use consistent key bindings across screens and always show a footer with hints.
+
+  Important constraints (must follow):
+  - New cards start in Box 1.
+  - Correct answer MUST move a card up one box (max Box 5).
+  - Incorrect answer MUST move a card down one box (min Box 1).
+  - Review session MUST only pull cards where nextDue <= today (local date).
+  - nextDue SHOULD be stored as a local calendar date (YYYY-MM-DD) or as a timestamp compared by local date.
+  - Persistence MUST be resilient to crashes (write temp file then rename).
+  - CSV import/export MUST use columns: kanji, hiragana, english, tags
+  - tags in CSV MUST be a single field using a stable delimiter (recommended: pipe `|`).
+
+rules:
+  specs:
+    - Diff sections MUST use ADDED / MODIFIED / REMOVED / RENAMED Requirements headings.
+    - Every Requirement MUST include at least one `#### Scenario:` (required).
+    - Normative requirements MUST use SHALL/MUST; avoid should/may unless intentionally non-normative.
+    - MODIFIED MUST include the full requirement block (heading + scenarios). Partial diffs are not allowed.
