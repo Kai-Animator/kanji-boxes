@@ -18,6 +18,15 @@ go mod download
 go run .
 ```
 
+## Install (Run From Anywhere)
+
+```bash
+GOBIN="$HOME/.local/bin" go install .
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Add the PATH export to your shell profile (e.g. `~/.zshrc`) to make it permanent.
+
 ## Data Storage
 
 By default, data is stored under your OS user config directory:
