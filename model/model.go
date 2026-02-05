@@ -25,6 +25,8 @@ const (
 	screenAddCard
 	screenBrowse
 	screenImportExport
+	screenEditCard
+	screenDeleteConfirm
 )
 
 type ioMode int
@@ -51,6 +53,10 @@ type Model struct {
 	addInputs    []textinput.Model
 	addFocus     int
 	addMessage   string
+	editInputs   []textinput.Model
+	editFocus    int
+	editMessage  string
+	editID       string
 	state        storage.AppState
 	stateErr     error
 	browseCards  []domain.Card
@@ -86,7 +92,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "q":
-			if m.screen != screenAddCard && m.screen != screenImportExport {
+			if m.screen != screenAddCard && m.screen != screenImportExport && m.screen != screenEditCard {
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -181,6 +187,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.browseCursor < len(m.browseCards)-1 {
 					m.browseCursor++
 				}
+			case "e":
+				if len(m.browseCards) > 0 {
+					m.screen = screenEditCard
+					m = m.startEditCard(m.browseCards[m.browseCursor])
+				}
+			case "d":
+				if len(m.browseCards) > 0 {
+					m.screen = screenDeleteConfirm
+				}
 			}
 		case screenImportExport:
 			switch m.ioMode {
@@ -216,6 +231,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.ioInput, _ = m.ioInput.Update(msg)
 			}
+		case screenEditCard:
+			switch key {
+			case "esc":
+				m.screen = screenBrowse
+			case "tab", "shift+tab", "up", "down":
+				m = m.moveEditFocus(key)
+			case "enter":
+				if m.editFocus < len(m.editInputs)-1 {
+					m = m.moveEditFocus("down")
+				} else {
+					m = m.saveEditCard()
+				}
+			}
+
+			for i := range m.editInputs {
+				if i == m.editFocus {
+					m.editInputs[i].Focus()
+				} else {
+					m.editInputs[i].Blur()
+				}
+				m.editInputs[i], _ = m.editInputs[i].Update(msg)
+			}
+		case screenDeleteConfirm:
+			switch key {
+			case "y":
+				m = m.deleteSelectedCard()
+			case "n", "esc":
+				m.screen = screenBrowse
+			}
 		}
 	}
 
@@ -238,6 +282,10 @@ func (m Model) View() string {
 		return m.browseView()
 	case screenImportExport:
 		return m.importExportView()
+	case screenEditCard:
+		return m.editCardView()
+	case screenDeleteConfirm:
+		return m.deleteConfirmView()
 	default:
 		return m.menuView()
 	}
@@ -397,7 +445,38 @@ func (m Model) browseView() string {
 	}
 
 	builder.WriteString("\n")
-	builder.WriteString(view.HintStyle.Render("up/down: move • esc: back • q: quit") + "\n")
+	builder.WriteString(view.HintStyle.Render("up/down: move • e: edit • d: delete • esc: back • q: quit") + "\n")
+	return builder.String()
+}
+
+func (m Model) editCardView() string {
+	var builder strings.Builder
+	builder.WriteString(view.TitleStyle.Render("Edit Card") + "\n\n")
+	labels := []string{"Kanji*", "English*", "Hiragana", "Tags (| separated)"}
+	for i, input := range m.editInputs {
+		builder.WriteString(labels[i] + "\n")
+		builder.WriteString(input.View() + "\n\n")
+	}
+
+	if m.editMessage != "" {
+		builder.WriteString(m.editMessage + "\n\n")
+	}
+	builder.WriteString("\n")
+	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • esc: back • q: quit") + "\n")
+	return builder.String()
+}
+
+func (m Model) deleteConfirmView() string {
+	var builder strings.Builder
+	builder.WriteString(view.TitleStyle.Render("Delete Card") + "\n\n")
+	if len(m.browseCards) == 0 {
+		builder.WriteString("No card selected.\n\n")
+		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
+		return builder.String()
+	}
+	card := m.browseCards[m.browseCursor]
+	builder.WriteString(fmt.Sprintf("Delete %s - %s?\n\n", card.Kanji, card.English))
+	builder.WriteString(view.HintStyle.Render("y: delete • n: cancel") + "\n")
 	return builder.String()
 }
 
@@ -494,6 +573,38 @@ func (m Model) startAddCard() Model {
 	return m
 }
 
+func (m Model) startEditCard(card domain.Card) Model {
+	inputs := make([]textinput.Model, 4)
+	for i := range inputs {
+		input := textinput.New()
+		input.CharLimit = 120
+		switch i {
+		case 0:
+			input.Placeholder = "例: 日"
+			input.SetValue(card.Kanji)
+		case 1:
+			input.Placeholder = "例: day"
+			input.SetValue(card.English)
+		case 2:
+			input.Placeholder = "例: にち"
+			if card.Hiragana != nil {
+				input.SetValue(*card.Hiragana)
+			}
+		case 3:
+			input.Placeholder = "例: jlpt5|common"
+			input.SetValue(strings.Join(card.Tags, "|"))
+		}
+		inputs[i] = input
+	}
+	inputs[0].Focus()
+
+	m.editInputs = inputs
+	m.editFocus = 0
+	m.editMessage = ""
+	m.editID = card.ID
+	return m
+}
+
 func (m Model) startBrowse() Model {
 	m.browseErr = nil
 
@@ -557,6 +668,28 @@ func (m Model) moveAddFocus(key string) Model {
 	return m
 }
 
+func (m Model) moveEditFocus(key string) Model {
+	count := len(m.editInputs)
+	if count == 0 {
+		return m
+	}
+
+	switch key {
+	case "up", "shift+tab":
+		m.editFocus--
+	case "down", "tab":
+		m.editFocus++
+	}
+
+	if m.editFocus < 0 {
+		m.editFocus = count - 1
+	}
+	if m.editFocus >= count {
+		m.editFocus = 0
+	}
+	return m
+}
+
 func (m Model) saveAddCard() Model {
 	kanji := strings.TrimSpace(m.addInputs[0].Value())
 	english := strings.TrimSpace(m.addInputs[1].Value())
@@ -616,6 +749,71 @@ func (m Model) saveAddCard() Model {
 
 	m = m.startAddCard()
 	m.addMessage = "Card saved."
+	return m
+}
+
+func (m Model) saveEditCard() Model {
+	kanji := strings.TrimSpace(m.editInputs[0].Value())
+	english := strings.TrimSpace(m.editInputs[1].Value())
+	hiragana := strings.TrimSpace(m.editInputs[2].Value())
+	tagsInput := strings.TrimSpace(m.editInputs[3].Value())
+
+	if kanji == "" || english == "" {
+		m.editMessage = "Kanji and English are required."
+		return m
+	}
+
+	dataDir, err := storage.ResolveDataDir("")
+	if err != nil {
+		m.editMessage = "Failed to resolve data dir: " + err.Error()
+		return m
+	}
+
+	cards, err := storage.LoadCards(storage.CardsPath(dataDir))
+	if err != nil {
+		m.editMessage = "Failed to load cards: " + err.Error()
+		return m
+	}
+
+	var hiraPtr *string
+	if hiragana != "" {
+		hira := hiragana
+		hiraPtr = &hira
+	}
+
+	var tags []string
+	if tagsInput != "" {
+		for _, tag := range strings.Split(tagsInput, "|") {
+			trimmed := strings.TrimSpace(tag)
+			if trimmed != "" {
+				tags = append(tags, trimmed)
+			}
+		}
+	}
+
+	updated := false
+	for i := range cards {
+		if cards[i].ID == m.editID {
+			cards[i].Kanji = kanji
+			cards[i].English = english
+			cards[i].Hiragana = hiraPtr
+			cards[i].Tags = tags
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		m.editMessage = "Card not found."
+		return m
+	}
+
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		m.editMessage = "Failed to save card: " + err.Error()
+		return m
+	}
+
+	m = m.startBrowse()
+	m.screen = screenBrowse
 	return m
 }
 
@@ -686,6 +884,45 @@ func (m Model) performImportExport() Model {
 	m.ioInput.SetValue("")
 	m.ioInput.Blur()
 	m.ioAction = ""
+	return m
+}
+
+func (m Model) deleteSelectedCard() Model {
+	dataDir, err := storage.ResolveDataDir("")
+	if err != nil {
+		m.browseErr = err
+		m.screen = screenBrowse
+		return m
+	}
+
+	if len(m.browseCards) == 0 {
+		m.screen = screenBrowse
+		return m
+	}
+
+	deleteID := m.browseCards[m.browseCursor].ID
+	cards, err := storage.LoadCards(storage.CardsPath(dataDir))
+	if err != nil {
+		m.browseErr = err
+		m.screen = screenBrowse
+		return m
+	}
+
+	filtered := make([]domain.Card, 0, len(cards))
+	for _, card := range cards {
+		if card.ID != deleteID {
+			filtered = append(filtered, card)
+		}
+	}
+
+	if err := storage.SaveCards(storage.CardsPath(dataDir), filtered); err != nil {
+		m.browseErr = err
+		m.screen = screenBrowse
+		return m
+	}
+
+	m = m.startBrowse()
+	m.screen = screenBrowse
 	return m
 }
 

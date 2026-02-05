@@ -63,6 +63,8 @@ Shows today's totals and a multi-day history.
 Shows a list of cards and basic details.
 
 - `up/down`: move selection
+- `e`: edit selected card
+- `d`: delete selected card
 - `esc`: back to menu
 
 ### Import / Export
