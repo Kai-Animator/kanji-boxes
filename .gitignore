@@ -1,0 +1,6 @@
+# Build outputs
+kanji-box
+kanji-boxes
+
+# OS files
+.DS_Store
