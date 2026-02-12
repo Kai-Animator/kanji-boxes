@@ -331,10 +331,10 @@ func (m Model) reviewView() string {
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
 			builder.WriteString(fmt.Sprintf("%s\n", card.Kanji))
+			if card.Hiragana != nil {
+				builder.WriteString(fmt.Sprintf("%s\n", *card.Hiragana))
+			}
 			if m.reveal {
-				if card.Hiragana != nil {
-					builder.WriteString(fmt.Sprintf("%s\n", *card.Hiragana))
-				}
 				builder.WriteString(fmt.Sprintf("%s\n", card.English))
 			} else {
 				builder.WriteString("(press space to flip)\n")
