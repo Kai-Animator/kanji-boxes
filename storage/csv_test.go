@@ -16,6 +16,7 @@ func TestExportCardsCSVHeaderAndTags(t *testing.T) {
 			Kanji:    "日",
 			Hiragana: &hiragana,
 			English:  "day",
+			Usage:    "日が昇る。",
 			Tags:     []string{"jlpt5", "common"},
 		},
 	}
@@ -30,7 +31,7 @@ func TestExportCardsCSVHeaderAndTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read header: %v", err)
 	}
-	expectedHeader := []string{"kanji", "hiragana", "english", "tags"}
+	expectedHeader := []string{"kanji", "hiragana", "english", "usage", "tags"}
 	for i, value := range expectedHeader {
 		if header[i] != value {
 			t.Fatalf("header mismatch at %d: %s", i, header[i])
@@ -41,8 +42,11 @@ func TestExportCardsCSVHeaderAndTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read record: %v", err)
 	}
-	if record[3] != "jlpt5|common" {
-		t.Fatalf("unexpected tags value: %s", record[3])
+	if record[3] != "日が昇る。" {
+		t.Fatalf("unexpected usage value: %s", record[3])
+	}
+	if record[4] != "jlpt5|common" {
+		t.Fatalf("unexpected tags value: %s", record[4])
 	}
 }
 
@@ -52,7 +56,7 @@ func TestImportCardsCSVDefaultsAndTags(t *testing.T) {
 		t.Fatalf("parse date: %v", err)
 	}
 
-	data := strings.NewReader("kanji,hiragana,english,tags\n日,にち,day,jlpt5|common\n")
+	data := strings.NewReader("kanji,hiragana,english,usage,tags\n日,にち,day,日が昇る。,jlpt5|common\n")
 	cards, err := ImportCardsCSV(data, today)
 	if err != nil {
 		t.Fatalf("import: %v", err)
@@ -68,5 +72,8 @@ func TestImportCardsCSVDefaultsAndTags(t *testing.T) {
 	}
 	if len(cards[0].Tags) != 2 {
 		t.Fatalf("expected 2 tags, got %d", len(cards[0].Tags))
+	}
+	if cards[0].Usage != "日が昇る。" {
+		t.Fatalf("unexpected usage value: %s", cards[0].Usage)
 	}
 }

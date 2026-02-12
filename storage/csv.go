@@ -8,7 +8,8 @@ import (
 	"kanji-boxes/domain"
 )
 
-var csvHeader = []string{"kanji", "hiragana", "english", "tags"}
+var csvHeader = []string{"kanji", "hiragana", "english", "usage", "tags"}
+var csvHeaderLegacy = []string{"kanji", "hiragana", "english", "tags"}
 
 func ExportCardsCSV(writer io.Writer, cards []domain.Card) error {
 	csvWriter := csv.NewWriter(writer)
@@ -25,6 +26,7 @@ func ExportCardsCSV(writer io.Writer, cards []domain.Card) error {
 			card.Kanji,
 			hiragana,
 			card.English,
+			card.Usage,
 			strings.Join(card.Tags, "|"),
 		}
 		if err := csvWriter.Write(record); err != nil {
@@ -47,8 +49,14 @@ func ImportCardsCSV(reader io.Reader, today domain.LocalDate) ([]domain.Card, er
 	}
 
 	startIndex := 0
+	columns := csvColumns{kanji: 0, hiragana: 1, english: 2, usage: -1, tags: 3}
 	if isCSVHeader(records[0]) {
 		startIndex = 1
+		if matchCSVHeader(records[0], csvHeader) {
+			columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4}
+		}
+	} else if len(records[0]) >= 5 {
+		columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4}
 	}
 
 	cards := make([]domain.Card, 0, len(records))
@@ -59,20 +67,23 @@ func ImportCardsCSV(reader io.Reader, today domain.LocalDate) ([]domain.Card, er
 		}
 
 		var hiragana *string
-		if record[1] != "" {
-			value := record[1]
-			hiragana = &value
+		if value := fieldAt(record, columns.hiragana); value != "" {
+			hiraganaValue := value
+			hiragana = &hiraganaValue
 		}
 
+		usage := fieldAt(record, columns.usage)
+
 		tags := []string{}
-		if len(record) >= 4 && record[3] != "" {
-			tags = strings.Split(record[3], "|")
+		if value := fieldAt(record, columns.tags); value != "" {
+			tags = strings.Split(value, "|")
 		}
 
 		cards = append(cards, domain.Card{
-			Kanji:     record[0],
+			Kanji:     fieldAt(record, columns.kanji),
 			Hiragana:  hiragana,
-			English:   record[2],
+			English:   fieldAt(record, columns.english),
+			Usage:     usage,
 			Tags:      tags,
 			Box:       domain.BoxMin,
 			CreatedAt: today,
@@ -83,11 +94,30 @@ func ImportCardsCSV(reader io.Reader, today domain.LocalDate) ([]domain.Card, er
 	return cards, nil
 }
 
+type csvColumns struct {
+	kanji    int
+	hiragana int
+	english  int
+	usage    int
+	tags     int
+}
+
+func fieldAt(record []string, index int) string {
+	if index < 0 || index >= len(record) {
+		return ""
+	}
+	return record[index]
+}
+
 func isCSVHeader(record []string) bool {
-	if len(record) < len(csvHeader) {
+	return matchCSVHeader(record, csvHeader) || matchCSVHeader(record, csvHeaderLegacy)
+}
+
+func matchCSVHeader(record []string, header []string) bool {
+	if len(record) < len(header) {
 		return false
 	}
-	for i, field := range csvHeader {
+	for i, field := range header {
 		if strings.TrimSpace(strings.ToLower(record[i])) != field {
 			return false
 		}

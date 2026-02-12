@@ -94,7 +94,8 @@ func TestEditCardUpdatesFields(t *testing.T) {
 	m.editInputs[0].SetValue("火")
 	m.editInputs[1].SetValue("fire")
 	m.editInputs[2].SetValue("ひ")
-	m.editInputs[3].SetValue("jlpt5|basic")
+	m.editInputs[3].SetValue("火が燃える。")
+	m.editInputs[4].SetValue("jlpt5|basic")
 	m = m.saveEditCard()
 
 	updated, err := storage.LoadCards(storage.CardsPath(dataDir))
@@ -103,6 +104,9 @@ func TestEditCardUpdatesFields(t *testing.T) {
 	}
 	if updated[0].Kanji != "火" || updated[0].English != "fire" {
 		t.Fatalf("unexpected card: %+v", updated[0])
+	}
+	if updated[0].Usage != "火が燃える。" {
+		t.Fatalf("unexpected usage: %s", updated[0].Usage)
 	}
 	if updated[0].ID != "edit" {
 		t.Fatalf("expected id preserved, got %s", updated[0].ID)

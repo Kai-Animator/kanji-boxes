@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"kanji-boxes/domain"
 	"kanji-boxes/storage"
@@ -295,13 +296,16 @@ func (m Model) menuView() string {
 
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Kanji Boxes") + "\n\n")
+	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n\n")
 
 	for i, choice := range m.choices {
 		cursor := " "
+		choiceStyle := view.MenuStyle
 		if m.cursor == i {
 			cursor = view.CursorStyle.Render(">")
+			choiceStyle = view.MenuActiveStyle
 		}
-		builder.WriteString(cursor + " " + choice + "\n")
+		builder.WriteString(cursor + " " + choiceStyle.Render(choice) + "\n")
 	}
 
 	builder.WriteString("\n")
@@ -315,27 +319,30 @@ func (m Model) reviewView() string {
 	builder.WriteString(view.TitleStyle.Render("Review") + "\n\n")
 
 	if m.reviewErr != nil {
-		builder.WriteString("Failed to load cards: " + m.reviewErr.Error() + "\n")
+		builder.WriteString(view.ErrorStyle.Render("Failed to load cards: "+m.reviewErr.Error()) + "\n")
 		builder.WriteString("\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 
-	builder.WriteString(fmt.Sprintf("Due cards: %d\n\n", len(m.reviewQueue)))
+	builder.WriteString(view.LabelStyle.Render("Due cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.reviewQueue))) + "\n\n")
 	if len(m.reviewQueue) == 0 {
-		builder.WriteString("No cards due today.\n")
+		builder.WriteString(view.SuccessStyle.Render("No cards due today.") + "\n")
 	} else {
-		builder.WriteString(fmt.Sprintf("Progress: %d/%d reviewed\n\n", m.reviewIndex, len(m.reviewQueue)))
+		builder.WriteString(view.LabelStyle.Render("Progress: ") + view.ValueStyle.Render(fmt.Sprintf("%d/%d", m.reviewIndex, len(m.reviewQueue))) + " reviewed\n\n")
 		if m.reviewIndex >= len(m.reviewQueue) {
-			builder.WriteString("Session complete.\n")
+			builder.WriteString(view.SubtitleStyle.Render("Session complete.") + "\n")
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
-			builder.WriteString(fmt.Sprintf("%s\n", card.Kanji))
+			builder.WriteString(view.SubtitleStyle.Render(card.Kanji) + "\n")
 			if card.Hiragana != nil {
-				builder.WriteString(fmt.Sprintf("%s\n", *card.Hiragana))
+				builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
+			}
+			if card.Usage != "" {
+				builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
 			}
 			if m.reveal {
-				builder.WriteString(fmt.Sprintf("%s\n", card.English))
+				builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
 			} else {
 				builder.WriteString("(press space to flip)\n")
 			}
@@ -348,32 +355,54 @@ func (m Model) reviewView() string {
 	return builder.String()
 }
 
+func highlightUsage(sentence string, kanji string, hiragana *string) string {
+	highlighted := sentence
+	if kanji != "" {
+		highlighted = strings.ReplaceAll(highlighted, kanji, view.HighlightStyle.Render(kanji))
+	}
+	if hiragana != nil {
+		value := *hiragana
+		if value != "" {
+			highlighted = strings.ReplaceAll(highlighted, value, view.HighlightStyle.Render(value))
+		}
+	}
+	return highlighted
+}
+
+func statusMessageStyle(message string) lipgloss.Style {
+	messageLower := strings.ToLower(message)
+	if strings.Contains(messageLower, "failed") || strings.Contains(messageLower, "required") || strings.Contains(messageLower, "error") {
+		return view.ErrorStyle
+	}
+	return view.SuccessStyle
+}
+
 func (m Model) statsView() string {
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Stats") + "\n\n")
 	if m.stateErr != nil {
-		builder.WriteString("Failed to load stats: " + m.stateErr.Error() + "\n\n")
+		builder.WriteString(view.ErrorStyle.Render("Failed to load stats: "+m.stateErr.Error()) + "\n\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 
 	if len(m.state.DailyStats) == 0 {
-		builder.WriteString("No stats yet.\n\n")
+		builder.WriteString(view.SuccessStyle.Render("No stats yet.") + "\n\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 
 	date := domain.Today().String()
-	builder.WriteString(fmt.Sprintf("Today (%s)\n", date))
-	builder.WriteString(fmt.Sprintf("Reviewed: %d\n", m.session.Reviewed))
-	builder.WriteString(fmt.Sprintf("Correct: %d\n", m.session.Correct))
-	builder.WriteString(fmt.Sprintf("Incorrect: %d\n", m.session.Incorrect))
+	builder.WriteString(view.SubtitleStyle.Render(fmt.Sprintf("Today (%s)", date)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Reviewed: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Reviewed)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Correct: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Incorrect: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Incorrect)) + "\n")
 	builder.WriteString("\n")
 
-	builder.WriteString("History (last 7 days)\n")
+	builder.WriteString(view.SubtitleStyle.Render("History (last 7 days)") + "\n")
 	for _, day := range recentDates(m.state.DailyStats, 7) {
 		stats := m.state.DailyStats[day]
-		builder.WriteString(fmt.Sprintf("%s  %d/%d/%d\n", day, stats.Reviewed, stats.Correct, stats.Incorrect))
+		builder.WriteString(view.ValueStyle.Render(fmt.Sprintf("%s  %d/%d/%d", day, stats.Reviewed, stats.Correct, stats.Incorrect)) + "\n")
 	}
 	builder.WriteString("\n")
 	builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
@@ -383,14 +412,19 @@ func (m Model) statsView() string {
 func (m Model) addCardView() string {
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Add Card") + "\n\n")
-	labels := []string{"Kanji*", "English*", "Hiragana", "Tags (| separated)"}
+	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n\n")
+	labels := []string{"Kanji*", "English*", "Hiragana", "Usage sentence", "Tags (| separated)"}
 	for i, input := range m.addInputs {
-		builder.WriteString(labels[i] + "\n")
-		builder.WriteString(input.View() + "\n\n")
+		inputStyle := view.InputStyle
+		if i == m.addFocus {
+			inputStyle = view.InputFocusStyle
+		}
+		builder.WriteString(view.LabelStyle.Render(labels[i]) + "\n")
+		builder.WriteString(inputStyle.Render(input.View()) + "\n\n")
 	}
 
 	if m.addMessage != "" {
-		builder.WriteString(m.addMessage + "\n\n")
+		builder.WriteString(statusMessageStyle(m.addMessage).Render(m.addMessage) + "\n\n")
 	}
 	builder.WriteString("\n")
 	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • esc: back • q: quit") + "\n")
@@ -402,13 +436,13 @@ func (m Model) browseView() string {
 	builder.WriteString(view.TitleStyle.Render("Browse") + "\n\n")
 
 	if m.browseErr != nil {
-		builder.WriteString("Failed to load cards: " + m.browseErr.Error() + "\n\n")
+		builder.WriteString(view.ErrorStyle.Render("Failed to load cards: "+m.browseErr.Error()) + "\n\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 
 	if len(m.browseCards) == 0 {
-		builder.WriteString("No cards available.\n")
+		builder.WriteString(view.SuccessStyle.Render("No cards available.") + "\n")
 		builder.WriteString("\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
@@ -426,22 +460,24 @@ func (m Model) browseView() string {
 	for i := start; i < end; i++ {
 		card := m.browseCards[i]
 		cursor := " "
+		rowStyle := view.MenuStyle
 		if i == m.browseCursor {
 			cursor = view.CursorStyle.Render(">")
+			rowStyle = view.MenuActiveStyle
 		}
-		builder.WriteString(fmt.Sprintf("%s %s - %s\n", cursor, card.Kanji, card.English))
+		builder.WriteString(fmt.Sprintf("%s %s\n", cursor, rowStyle.Render(fmt.Sprintf("%s - %s", card.Kanji, card.English))))
 	}
 
 	selected := m.browseCards[m.browseCursor]
 	builder.WriteString("\n")
-	builder.WriteString("Details\n")
+	builder.WriteString(view.SubtitleStyle.Render("Details") + "\n")
 	if selected.Hiragana != nil {
-		builder.WriteString(fmt.Sprintf("Hiragana: %s\n", *selected.Hiragana))
+		builder.WriteString(view.LabelStyle.Render("Hiragana: ") + view.ValueStyle.Render(*selected.Hiragana) + "\n")
 	}
-	builder.WriteString(fmt.Sprintf("Box: %d\n", selected.Box))
-	builder.WriteString(fmt.Sprintf("Next due: %s\n", selected.NextDue.String()))
+	builder.WriteString(view.LabelStyle.Render("Box: ") + view.ValueStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Next due: ") + view.ValueStyle.Render(selected.NextDue.String()) + "\n")
 	if len(selected.Tags) > 0 {
-		builder.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(selected.Tags, ", ")))
+		builder.WriteString(view.LabelStyle.Render("Tags: ") + view.ValueStyle.Render(strings.Join(selected.Tags, ", ")) + "\n")
 	}
 
 	builder.WriteString("\n")
@@ -452,14 +488,19 @@ func (m Model) browseView() string {
 func (m Model) editCardView() string {
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Edit Card") + "\n\n")
-	labels := []string{"Kanji*", "English*", "Hiragana", "Tags (| separated)"}
+	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n\n")
+	labels := []string{"Kanji*", "English*", "Hiragana", "Usage sentence", "Tags (| separated)"}
 	for i, input := range m.editInputs {
-		builder.WriteString(labels[i] + "\n")
-		builder.WriteString(input.View() + "\n\n")
+		inputStyle := view.InputStyle
+		if i == m.editFocus {
+			inputStyle = view.InputFocusStyle
+		}
+		builder.WriteString(view.LabelStyle.Render(labels[i]) + "\n")
+		builder.WriteString(inputStyle.Render(input.View()) + "\n\n")
 	}
 
 	if m.editMessage != "" {
-		builder.WriteString(m.editMessage + "\n\n")
+		builder.WriteString(statusMessageStyle(m.editMessage).Render(m.editMessage) + "\n\n")
 	}
 	builder.WriteString("\n")
 	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • esc: back • q: quit") + "\n")
@@ -470,12 +511,12 @@ func (m Model) deleteConfirmView() string {
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Delete Card") + "\n\n")
 	if len(m.browseCards) == 0 {
-		builder.WriteString("No card selected.\n\n")
+		builder.WriteString(view.ErrorStyle.Render("No card selected.") + "\n\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 	card := m.browseCards[m.browseCursor]
-	builder.WriteString(fmt.Sprintf("Delete %s - %s?\n\n", card.Kanji, card.English))
+	builder.WriteString(view.ErrorStyle.Render(fmt.Sprintf("Delete %s - %s?", card.Kanji, card.English)) + "\n\n")
 	builder.WriteString(view.HintStyle.Render("y: delete • n: cancel") + "\n")
 	return builder.String()
 }
@@ -485,10 +526,10 @@ func (m Model) importExportView() string {
 	builder.WriteString(view.TitleStyle.Render("Import / Export") + "\n\n")
 
 	if m.ioErr != nil {
-		builder.WriteString("Error: " + m.ioErr.Error() + "\n\n")
+		builder.WriteString(view.ErrorStyle.Render("Error: "+m.ioErr.Error()) + "\n\n")
 	}
 	if m.ioMessage != "" {
-		builder.WriteString(m.ioMessage + "\n\n")
+		builder.WriteString(view.SuccessStyle.Render(m.ioMessage) + "\n\n")
 	}
 
 	switch m.ioMode {
@@ -496,10 +537,12 @@ func (m Model) importExportView() string {
 		options := []string{"Import CSV", "Export CSV"}
 		for i, option := range options {
 			cursor := " "
+			optionStyle := view.MenuStyle
 			if i == m.ioCursor {
 				cursor = view.CursorStyle.Render(">")
+				optionStyle = view.MenuActiveStyle
 			}
-			builder.WriteString(fmt.Sprintf("%s %s\n", cursor, option))
+			builder.WriteString(fmt.Sprintf("%s %s\n", cursor, optionStyle.Render(option)))
 		}
 		builder.WriteString("\n")
 		builder.WriteString(view.HintStyle.Render("up/down: move • enter: select • esc: back • q: quit") + "\n")
@@ -508,7 +551,7 @@ func (m Model) importExportView() string {
 		if m.ioAction == "export" {
 			label = "Export to file"
 		}
-		builder.WriteString(label + "\n")
+		builder.WriteString(view.SubtitleStyle.Render(label) + "\n")
 		builder.WriteString(m.ioInput.View() + "\n\n")
 		builder.WriteString(view.HintStyle.Render("enter: confirm • esc: back • q: quit") + "\n")
 	}
@@ -549,19 +592,21 @@ func (m Model) startReview() Model {
 }
 
 func (m Model) startAddCard() Model {
-	inputs := make([]textinput.Model, 4)
+	inputs := make([]textinput.Model, 5)
 	for i := range inputs {
 		input := textinput.New()
 		input.CharLimit = 120
 		switch i {
 		case 0:
-			input.Placeholder = "例: 日"
+			input.Placeholder = "例: 赤"
 		case 1:
-			input.Placeholder = "例: day"
+			input.Placeholder = "例: red"
 		case 2:
-			input.Placeholder = "例: にち"
+			input.Placeholder = "例: あか"
 		case 3:
-			input.Placeholder = "例: jlpt5|common"
+			input.Placeholder = "例: 赤いシャツをあげます。"
+		case 4:
+			input.Placeholder = "例: colors|jlpt5"
 		}
 		inputs[i] = input
 	}
@@ -574,24 +619,27 @@ func (m Model) startAddCard() Model {
 }
 
 func (m Model) startEditCard(card domain.Card) Model {
-	inputs := make([]textinput.Model, 4)
+	inputs := make([]textinput.Model, 5)
 	for i := range inputs {
 		input := textinput.New()
 		input.CharLimit = 120
 		switch i {
 		case 0:
-			input.Placeholder = "例: 日"
+			input.Placeholder = "例: 赤"
 			input.SetValue(card.Kanji)
 		case 1:
-			input.Placeholder = "例: day"
+			input.Placeholder = "例: red"
 			input.SetValue(card.English)
 		case 2:
-			input.Placeholder = "例: にち"
+			input.Placeholder = "例: あか"
 			if card.Hiragana != nil {
 				input.SetValue(*card.Hiragana)
 			}
 		case 3:
-			input.Placeholder = "例: jlpt5|common"
+			input.Placeholder = "例: 赤いシャツをあげます。"
+			input.SetValue(card.Usage)
+		case 4:
+			input.Placeholder = "例: colors|jlpt5"
 			input.SetValue(strings.Join(card.Tags, "|"))
 		}
 		inputs[i] = input
@@ -694,7 +742,8 @@ func (m Model) saveAddCard() Model {
 	kanji := strings.TrimSpace(m.addInputs[0].Value())
 	english := strings.TrimSpace(m.addInputs[1].Value())
 	hiragana := strings.TrimSpace(m.addInputs[2].Value())
-	tagsInput := strings.TrimSpace(m.addInputs[3].Value())
+	usage := strings.TrimSpace(m.addInputs[3].Value())
+	tagsInput := strings.TrimSpace(m.addInputs[4].Value())
 
 	if kanji == "" || english == "" {
 		m.addMessage = "Kanji and English are required."
@@ -735,6 +784,7 @@ func (m Model) saveAddCard() Model {
 		Kanji:     kanji,
 		Hiragana:  hiraPtr,
 		English:   english,
+		Usage:     usage,
 		Tags:      tags,
 		Box:       domain.BoxMin,
 		CreatedAt: today,
@@ -756,7 +806,8 @@ func (m Model) saveEditCard() Model {
 	kanji := strings.TrimSpace(m.editInputs[0].Value())
 	english := strings.TrimSpace(m.editInputs[1].Value())
 	hiragana := strings.TrimSpace(m.editInputs[2].Value())
-	tagsInput := strings.TrimSpace(m.editInputs[3].Value())
+	usage := strings.TrimSpace(m.editInputs[3].Value())
+	tagsInput := strings.TrimSpace(m.editInputs[4].Value())
 
 	if kanji == "" || english == "" {
 		m.editMessage = "Kanji and English are required."
@@ -797,6 +848,7 @@ func (m Model) saveEditCard() Model {
 			cards[i].Kanji = kanji
 			cards[i].English = english
 			cards[i].Hiragana = hiraPtr
+			cards[i].Usage = usage
 			cards[i].Tags = tags
 			updated = true
 			break

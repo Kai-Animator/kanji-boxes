@@ -5,6 +5,7 @@ type Card struct {
 	Kanji        string
 	Hiragana     *string
 	English      string
+	Usage        string
 	Box          int
 	CreatedAt    LocalDate
 	LastReviewed *LocalDate
