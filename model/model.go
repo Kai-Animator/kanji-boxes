@@ -46,6 +46,14 @@ const (
 	reviewModeCloze
 )
 
+// レビューモード重み付け（累積パーセンテージ）
+// 認識: 10%, 穴埋め: 30% (40-10), 産出: 60% (100-40)
+const (
+	recognitionThreshold = 10 // 0-9: 認識モード (10%)
+	clozeThreshold       = 40 // 10-39: 穴埋めモード (30%)
+	// 40-99: 産出モード (60%)
+)
+
 type Model struct {
 	choices      []string
 	cursor       int
@@ -71,6 +79,7 @@ type Model struct {
 	editID       string
 	state        storage.AppState
 	stateErr     error
+	stateWarning string // 保存失敗時の警告メッセージ
 	browseCards  []domain.Card
 	browseErr    error
 	browseCursor int
@@ -305,11 +314,10 @@ func (m Model) View() string {
 }
 
 func (m Model) menuView() string {
-
 	var builder strings.Builder
-	builder.WriteString(view.TitleStyle.Render("Kanji Boxes") + "\n\n")
-	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n\n")
 
+	// メニュー項目を構築
+	var menuContent strings.Builder
 	for i, choice := range m.choices {
 		cursor := " "
 		choiceStyle := view.MenuStyle
@@ -317,10 +325,13 @@ func (m Model) menuView() string {
 			cursor = view.CursorStyle.Render(">")
 			choiceStyle = view.MenuActiveStyle
 		}
-		builder.WriteString(cursor + " " + choiceStyle.Render(choice) + "\n")
+		menuContent.WriteString(cursor + " " + choiceStyle.Render(choice) + "\n")
 	}
 
-	builder.WriteString("\n")
+	// タイトルと装飾メニュー表示
+	builder.WriteString(view.TitleStyle.Render("漢字ボックス") + " " + view.HintStyle.Render("Kanji Boxes") + "\n\n")
+	builder.WriteString(view.MenuBoxStyle.Render(strings.TrimSuffix(menuContent.String(), "\n")))
+	builder.WriteString("\n\n")
 	builder.WriteString(view.HintStyle.Render("up/down: move • enter: select • q: quit") + "\n")
 
 	return builder.String()
@@ -337,55 +348,72 @@ func (m Model) reviewView() string {
 		return builder.String()
 	}
 
-	builder.WriteString(view.LabelStyle.Render("Due cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.reviewQueue))) + "\n\n")
+	// 警告メッセージ表示
+	if m.stateWarning != "" {
+		builder.WriteString(view.ErrorStyle.Render(m.stateWarning) + "\n")
+	}
+
+	builder.WriteString(view.LabelStyle.Render("Due cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.reviewQueue))) + "\n")
 	if len(m.reviewQueue) == 0 {
 		builder.WriteString(view.SuccessStyle.Render("No cards due today.") + "\n")
 	} else {
-		builder.WriteString(view.LabelStyle.Render("Progress: ") + view.ValueStyle.Render(fmt.Sprintf("%d/%d", m.reviewIndex, len(m.reviewQueue))) + " reviewed\n\n")
+		// プログレスバー表示
+		progressBar := view.RenderProgressBar(m.reviewIndex, len(m.reviewQueue), 20)
+		builder.WriteString(view.LabelStyle.Render("Progress: ") + progressBar + " " +
+			view.ValueStyle.Render(fmt.Sprintf("%d/%d", m.reviewIndex, len(m.reviewQueue))) + "\n\n")
+
 		if m.reviewIndex >= len(m.reviewQueue) {
-			builder.WriteString(view.SubtitleStyle.Render("Session complete.") + "\n")
+			builder.WriteString(view.SuccessStyle.Render("Session complete!") + "\n")
+			builder.WriteString(view.LabelStyle.Render("Correct: ") + view.CorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + " | ")
+			builder.WriteString(view.LabelStyle.Render("Incorrect: ") + view.IncorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Incorrect)) + "\n")
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
+
+			// レビューモードバッジ表示
+			modeBadge := m.reviewModeBadge()
+			boxStyle := view.BoxStyleForLevel(card.Box)
+			builder.WriteString(modeBadge + " " + view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", card.Box)) + "\n\n")
+
 			switch m.currentReviewMode() {
 			case reviewModeProduction:
 				if m.reveal {
-					builder.WriteString(view.SubtitleStyle.Render(card.Kanji) + "\n")
+					builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					if card.Hiragana != nil {
-						builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
+						builder.WriteString(view.HiraganaStyle.Render(*card.Hiragana) + "\n")
 					}
 					if card.Usage != "" {
-						builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
+						builder.WriteString(view.UsageStyle.Render(highlightUsage(card.Usage, card.Kanji, card.Hiragana)) + "\n")
 					}
 				} else {
 					builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
-					builder.WriteString("(press space to flip)\n")
+					builder.WriteString(view.HintStyle.Render("(press space to flip)") + "\n")
 				}
 			case reviewModeCloze:
 				if m.reveal {
 					builder.WriteString(view.ValueStyle.Render(clozeBack(card)) + "\n")
 				} else {
 					if card.Usage != "" {
-						builder.WriteString(view.ValueStyle.Render(clozeFront(card.Usage, card.Kanji, card.Hiragana)) + "\n")
+						builder.WriteString(view.UsageStyle.Render(clozeFront(card.Usage, card.Kanji, card.Hiragana)) + "\n")
 					} else {
-						builder.WriteString(view.HighlightStyle.Render(card.Kanji) + "\n")
+						builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					}
-					builder.WriteString("(press space to flip)\n")
+					builder.WriteString(view.HintStyle.Render("(press space to flip)") + "\n")
 				}
 			default:
 				if m.reveal {
 					if card.Hiragana != nil {
-						builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
+						builder.WriteString(view.HiraganaStyle.Render(*card.Hiragana) + "\n")
 					} else {
-						builder.WriteString(view.ValueStyle.Render(card.Kanji) + "\n")
+						builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					}
 					builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
 				} else {
 					if card.Usage != "" {
-						builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
+						builder.WriteString(view.UsageStyle.Render(highlightUsage(card.Usage, card.Kanji, card.Hiragana)) + "\n")
 					} else {
-						builder.WriteString(view.HighlightStyle.Render(card.Kanji) + "\n")
+						builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					}
-					builder.WriteString("(press space to flip)\n")
+					builder.WriteString(view.HintStyle.Render("(press space to flip)") + "\n")
 				}
 			}
 		}
@@ -395,6 +423,20 @@ func (m Model) reviewView() string {
 	builder.WriteString(view.HintStyle.Render("space: flip • y: correct • n: incorrect • esc: back • q: quit") + "\n")
 
 	return builder.String()
+}
+
+// reviewModeBadge はレビューモードのバッジを返す
+func (m Model) reviewModeBadge() string {
+	switch m.currentReviewMode() {
+	case reviewModeRecognition:
+		return view.RecognitionModeStyle.Render("[認識]")
+	case reviewModeProduction:
+		return view.ProductionModeStyle.Render("[産出]")
+	case reviewModeCloze:
+		return view.ClozeModeStyle.Render("[穴埋め]")
+	default:
+		return view.RecognitionModeStyle.Render("[認識]")
+	}
 }
 
 func highlightUsage(sentence string, kanji string, hiragana *string) string {
@@ -436,15 +478,27 @@ func (m Model) statsView() string {
 
 	date := domain.Today().String()
 	builder.WriteString(view.SubtitleStyle.Render(fmt.Sprintf("Today (%s)", date)) + "\n")
-	builder.WriteString(view.LabelStyle.Render("Reviewed: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Reviewed)) + "\n")
-	builder.WriteString(view.LabelStyle.Render("Correct: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + "\n")
-	builder.WriteString(view.LabelStyle.Render("Incorrect: ") + view.ValueStyle.Render(fmt.Sprintf("%d", m.session.Incorrect)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Reviewed: ") + view.NeutralStatStyle.Render(fmt.Sprintf("%d", m.session.Reviewed)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Correct:  ") + view.CorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + "\n")
+	builder.WriteString(view.LabelStyle.Render("Incorrect:") + view.IncorrectStatStyle.Render(fmt.Sprintf(" %d", m.session.Incorrect)) + "\n")
+
+	// 正答率表示（レビューがある場合）
+	if m.session.Reviewed > 0 {
+		accuracy := (m.session.Correct * 100) / m.session.Reviewed
+		progressBar := view.RenderProgressBar(m.session.Correct, m.session.Reviewed, 15)
+		builder.WriteString(view.LabelStyle.Render("Accuracy: ") + progressBar + " " +
+			view.ValueStyle.Render(fmt.Sprintf("%d%%", accuracy)) + "\n")
+	}
 	builder.WriteString("\n")
 
 	builder.WriteString(view.SubtitleStyle.Render("History (last 7 days)") + "\n")
+	builder.WriteString(view.HintStyle.Render("Date       Rev  ✓   ✗") + "\n")
 	for _, day := range recentDates(m.state.DailyStats, 7) {
 		stats := m.state.DailyStats[day]
-		builder.WriteString(view.ValueStyle.Render(fmt.Sprintf("%s  %d/%d/%d", day, stats.Reviewed, stats.Correct, stats.Incorrect)) + "\n")
+		builder.WriteString(view.ValueStyle.Render(day) + "  " +
+			view.NeutralStatStyle.Render(fmt.Sprintf("%3d", stats.Reviewed)) + "  " +
+			view.CorrectStatStyle.Render(fmt.Sprintf("%3d", stats.Correct)) + " " +
+			view.IncorrectStatStyle.Render(fmt.Sprintf("%3d", stats.Incorrect)) + "\n")
 	}
 	builder.WriteString("\n")
 	builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
@@ -490,6 +544,9 @@ func (m Model) browseView() string {
 		return builder.String()
 	}
 
+	// カード数表示
+	builder.WriteString(view.LabelStyle.Render("Cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.browseCards))) + "\n\n")
+
 	start := m.browseCursor - 5
 	if start < 0 {
 		start = 0
@@ -507,16 +564,22 @@ func (m Model) browseView() string {
 			cursor = view.CursorStyle.Render(">")
 			rowStyle = view.MenuActiveStyle
 		}
-		builder.WriteString(fmt.Sprintf("%s %s\n", cursor, rowStyle.Render(fmt.Sprintf("%s - %s", card.Kanji, card.English))))
+		// ボックスレベルに応じた色でインジケーター表示
+		boxIndicator := view.BoxStyleForLevel(card.Box).Render(fmt.Sprintf("[%d]", card.Box))
+		builder.WriteString(fmt.Sprintf("%s %s %s\n", cursor, boxIndicator, rowStyle.Render(fmt.Sprintf("%s - %s", card.Kanji, card.English))))
 	}
 
 	selected := m.browseCards[m.browseCursor]
 	builder.WriteString("\n")
 	builder.WriteString(view.SubtitleStyle.Render("Details") + "\n")
 	if selected.Hiragana != nil {
-		builder.WriteString(view.LabelStyle.Render("Hiragana: ") + view.ValueStyle.Render(*selected.Hiragana) + "\n")
+		builder.WriteString(view.LabelStyle.Render("Hiragana: ") + view.HiraganaStyle.Render(*selected.Hiragana) + "\n")
 	}
-	builder.WriteString(view.LabelStyle.Render("Box: ") + view.ValueStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
+	if selected.Usage != "" {
+		builder.WriteString(view.LabelStyle.Render("Usage: ") + view.UsageStyle.Render(selected.Usage) + "\n")
+	}
+	boxStyle := view.BoxStyleForLevel(selected.Box)
+	builder.WriteString(view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
 	builder.WriteString(view.LabelStyle.Render("Next due: ") + view.ValueStyle.Render(selected.NextDue.String()) + "\n")
 	if len(selected.Tags) > 0 {
 		builder.WriteString(view.LabelStyle.Render("Tags: ") + view.ValueStyle.Render(strings.Join(selected.Tags, ", ")) + "\n")
@@ -628,11 +691,11 @@ func (m Model) startReview() Model {
 	m.reviewModes = make([]reviewMode, len(m.reviewQueue))
 	for i := range m.reviewModes {
 		roll := m.rng.Intn(100)
-		if roll < 10 {
+		if roll < recognitionThreshold {
 			m.reviewModes[i] = reviewModeRecognition
 			continue
 		}
-		if roll < 40 {
+		if roll < clozeThreshold {
 			m.reviewModes[i] = reviewModeCloze
 			continue
 		}
@@ -641,8 +704,11 @@ func (m Model) startReview() Model {
 	m.reviewOrder = indicesForCards(cards, m.reviewQueue)
 	m.reviewIndex = 0
 	m.reveal = false
+	m.stateWarning = ""
 	m.session = m.state.DailyStats[domain.Today().String()]
-	_ = storage.SaveState(storage.StatePath(dataDir), m.state)
+	if err := storage.SaveState(storage.StatePath(dataDir), m.state); err != nil {
+		m.stateWarning = "Warning: Failed to save state"
+	}
 	return m
 }
 
@@ -793,14 +859,56 @@ func (m Model) moveEditFocus(key string) Model {
 	return m
 }
 
-func (m Model) saveAddCard() Model {
-	kanji := strings.TrimSpace(m.addInputs[0].Value())
-	english := strings.TrimSpace(m.addInputs[1].Value())
-	hiragana := strings.TrimSpace(m.addInputs[2].Value())
-	usage := strings.TrimSpace(m.addInputs[3].Value())
-	tagsInput := strings.TrimSpace(m.addInputs[4].Value())
+// cardInput はカード入力フォームから抽出されたデータ
+type cardInput struct {
+	kanji    string
+	english  string
+	hiragana *string
+	usage    string
+	tags     []string
+}
 
-	if kanji == "" || english == "" {
+// parseCardInputs はテキスト入力からカードデータを抽出する
+func parseCardInputs(inputs []textinput.Model) cardInput {
+	kanji := strings.TrimSpace(inputs[0].Value())
+	english := strings.TrimSpace(inputs[1].Value())
+	hiragana := strings.TrimSpace(inputs[2].Value())
+	usage := strings.TrimSpace(inputs[3].Value())
+	tagsInput := strings.TrimSpace(inputs[4].Value())
+
+	var hiraPtr *string
+	if hiragana != "" {
+		hiraPtr = &hiragana
+	}
+
+	return cardInput{
+		kanji:    kanji,
+		english:  english,
+		hiragana: hiraPtr,
+		usage:    usage,
+		tags:     parseTags(tagsInput),
+	}
+}
+
+// parseTags はパイプ区切りのタグ文字列をスライスに変換する
+func parseTags(input string) []string {
+	if input == "" {
+		return nil
+	}
+	var tags []string
+	for _, tag := range strings.Split(input, "|") {
+		trimmed := strings.TrimSpace(tag)
+		if trimmed != "" {
+			tags = append(tags, trimmed)
+		}
+	}
+	return tags
+}
+
+func (m Model) saveAddCard() Model {
+	input := parseCardInputs(m.addInputs)
+
+	if input.kanji == "" || input.english == "" {
 		m.addMessage = "Kanji and English are required."
 		return m
 	}
@@ -817,30 +925,14 @@ func (m Model) saveAddCard() Model {
 		return m
 	}
 
-	var hiraPtr *string
-	if hiragana != "" {
-		hira := hiragana
-		hiraPtr = &hira
-	}
-
-	var tags []string
-	if tagsInput != "" {
-		for _, tag := range strings.Split(tagsInput, "|") {
-			trimmed := strings.TrimSpace(tag)
-			if trimmed != "" {
-				tags = append(tags, trimmed)
-			}
-		}
-	}
-
 	today := domain.Today()
 	card := domain.Card{
 		ID:        fmt.Sprintf("card-%d", time.Now().UnixNano()),
-		Kanji:     kanji,
-		Hiragana:  hiraPtr,
-		English:   english,
-		Usage:     usage,
-		Tags:      tags,
+		Kanji:     input.kanji,
+		Hiragana:  input.hiragana,
+		English:   input.english,
+		Usage:     input.usage,
+		Tags:      input.tags,
 		Box:       domain.BoxMin,
 		CreatedAt: today,
 		NextDue:   today,
@@ -858,13 +950,9 @@ func (m Model) saveAddCard() Model {
 }
 
 func (m Model) saveEditCard() Model {
-	kanji := strings.TrimSpace(m.editInputs[0].Value())
-	english := strings.TrimSpace(m.editInputs[1].Value())
-	hiragana := strings.TrimSpace(m.editInputs[2].Value())
-	usage := strings.TrimSpace(m.editInputs[3].Value())
-	tagsInput := strings.TrimSpace(m.editInputs[4].Value())
+	input := parseCardInputs(m.editInputs)
 
-	if kanji == "" || english == "" {
+	if input.kanji == "" || input.english == "" {
 		m.editMessage = "Kanji and English are required."
 		return m
 	}
@@ -881,30 +969,14 @@ func (m Model) saveEditCard() Model {
 		return m
 	}
 
-	var hiraPtr *string
-	if hiragana != "" {
-		hira := hiragana
-		hiraPtr = &hira
-	}
-
-	var tags []string
-	if tagsInput != "" {
-		for _, tag := range strings.Split(tagsInput, "|") {
-			trimmed := strings.TrimSpace(tag)
-			if trimmed != "" {
-				tags = append(tags, trimmed)
-			}
-		}
-	}
-
 	updated := false
 	for i := range cards {
 		if cards[i].ID == m.editID {
-			cards[i].Kanji = kanji
-			cards[i].English = english
-			cards[i].Hiragana = hiraPtr
-			cards[i].Usage = usage
-			cards[i].Tags = tags
+			cards[i].Kanji = input.kanji
+			cards[i].English = input.english
+			cards[i].Hiragana = input.hiragana
+			cards[i].Usage = input.usage
+			cards[i].Tags = input.tags
 			updated = true
 			break
 		}
@@ -1073,7 +1145,9 @@ func (m Model) applyAnswer(correct bool) Model {
 		m.state.DailyStats = map[string]domain.SessionStats{}
 	}
 	m.state.DailyStats[domain.Today().String()] = m.session
-	_ = storage.SaveState(storage.StatePath(m.dataDir), m.state)
+	if err := storage.SaveState(storage.StatePath(m.dataDir), m.state); err != nil {
+		m.stateWarning = "Warning: Failed to save state"
+	}
 
 	m.reviewIndex++
 	m.reveal = false

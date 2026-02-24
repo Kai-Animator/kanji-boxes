@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"kanji-boxes/domain"
 	"kanji-boxes/storage"
 )
@@ -296,4 +298,279 @@ func tempDataDir(t *testing.T) string {
 		_ = os.RemoveAll(dataDir)
 	})
 	return dataDir
+}
+
+func TestParseTagsEmpty(t *testing.T) {
+	tags := parseTags("")
+	if tags != nil {
+		t.Errorf("expected nil for empty input, got %v", tags)
+	}
+}
+
+func TestParseTagsSingle(t *testing.T) {
+	tags := parseTags("jlpt5")
+	if len(tags) != 1 || tags[0] != "jlpt5" {
+		t.Errorf("expected [jlpt5], got %v", tags)
+	}
+}
+
+func TestParseTagsMultiple(t *testing.T) {
+	tags := parseTags("jlpt5|colors|basic")
+	expected := []string{"jlpt5", "colors", "basic"}
+	if len(tags) != len(expected) {
+		t.Fatalf("expected %d tags, got %d", len(expected), len(tags))
+	}
+	for i, tag := range expected {
+		if tags[i] != tag {
+			t.Errorf("expected tags[%d]=%s, got %s", i, tag, tags[i])
+		}
+	}
+}
+
+func TestParseTagsTrimWhitespace(t *testing.T) {
+	tags := parseTags("  jlpt5  |  colors  ")
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tags))
+	}
+	if tags[0] != "jlpt5" || tags[1] != "colors" {
+		t.Errorf("expected trimmed tags, got %v", tags)
+	}
+}
+
+func TestParseTagsSkipsEmpty(t *testing.T) {
+	tags := parseTags("jlpt5||colors|")
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags (skipping empty), got %d: %v", len(tags), tags)
+	}
+}
+
+func TestMenuViewContainsAllChoices(t *testing.T) {
+	m := New()
+	view := m.menuView()
+
+	choices := []string{"Review", "Add Card", "Browse", "Import / Export", "Stats", "Quit"}
+	for _, choice := range choices {
+		if !strings.Contains(view, choice) {
+			t.Errorf("menu view should contain %q", choice)
+		}
+	}
+}
+
+// updateModel はUpdate呼び出しの結果をModel型に変換するヘルパー
+func updateModel(m Model, msg tea.Msg) (Model, tea.Cmd) {
+	updated, cmd := m.Update(msg)
+	return updated.(Model), cmd
+}
+
+func TestMenuNavigationUp(t *testing.T) {
+	m := New()
+	m.cursor = 2
+
+	m, _ = updateModel(m, keyMsg("up"))
+	if m.cursor != 1 {
+		t.Errorf("expected cursor=1 after up, got %d", m.cursor)
+	}
+
+	m, _ = updateModel(m, keyMsg("k"))
+	if m.cursor != 0 {
+		t.Errorf("expected cursor=0 after k, got %d", m.cursor)
+	}
+
+	// 上限で止まる
+	m, _ = updateModel(m, keyMsg("up"))
+	if m.cursor != 0 {
+		t.Errorf("expected cursor=0 at top, got %d", m.cursor)
+	}
+}
+
+func TestMenuNavigationDown(t *testing.T) {
+	m := New()
+	m.cursor = 0
+
+	m, _ = updateModel(m, keyMsg("down"))
+	if m.cursor != 1 {
+		t.Errorf("expected cursor=1 after down, got %d", m.cursor)
+	}
+
+	m, _ = updateModel(m, keyMsg("j"))
+	if m.cursor != 2 {
+		t.Errorf("expected cursor=2 after j, got %d", m.cursor)
+	}
+}
+
+func TestScreenTransitionToStats(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	defer os.Unsetenv(storage.EnvDataDir)
+
+	m := New()
+	m.cursor = 4 // Stats
+	m, _ = updateModel(m, keyMsg("enter"))
+
+	if m.screen != screenStats {
+		t.Errorf("expected stats screen, got %d", m.screen)
+	}
+}
+
+func TestScreenTransitionBackFromStats(t *testing.T) {
+	m := New()
+	m.screen = screenStats
+
+	m, _ = updateModel(m, keyMsg("esc"))
+
+	if m.screen != screenMenu {
+		t.Errorf("expected menu screen after esc, got %d", m.screen)
+	}
+}
+
+func TestEmptyReviewQueue(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	defer os.Unsetenv(storage.EnvDataDir)
+
+	// 空のカードリストを保存
+	if err := storage.SaveCards(storage.CardsPath(dataDir), []domain.Card{}); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m = m.startReview()
+
+	if len(m.reviewQueue) != 0 {
+		t.Errorf("expected empty queue, got %d", len(m.reviewQueue))
+	}
+
+	view := m.reviewView()
+	if !strings.Contains(view, "No cards due today") {
+		t.Errorf("expected 'No cards due today' message, got %q", view)
+	}
+}
+
+func TestReviewModeBadge(t *testing.T) {
+	m := New()
+	m.reviewQueue = []domain.Card{{Kanji: "日"}}
+	m.reviewModes = []reviewMode{reviewModeRecognition}
+	m.reviewIndex = 0
+
+	badge := m.reviewModeBadge()
+	if !strings.Contains(badge, "認識") {
+		t.Errorf("expected recognition badge, got %q", badge)
+	}
+
+	m.reviewModes[0] = reviewModeProduction
+	badge = m.reviewModeBadge()
+	if !strings.Contains(badge, "産出") {
+		t.Errorf("expected production badge, got %q", badge)
+	}
+
+	m.reviewModes[0] = reviewModeCloze
+	badge = m.reviewModeBadge()
+	if !strings.Contains(badge, "穴埋め") {
+		t.Errorf("expected cloze badge, got %q", badge)
+	}
+}
+
+func TestBrowseViewEmptyCards(t *testing.T) {
+	m := New()
+	m.browseCards = []domain.Card{}
+
+	view := m.browseView()
+	if !strings.Contains(view, "No cards available") {
+		t.Errorf("expected 'No cards available' message, got %q", view)
+	}
+}
+
+func TestBrowseNavigation(t *testing.T) {
+	m := New()
+	m.screen = screenBrowse
+	m.browseCards = []domain.Card{
+		{ID: "1", Kanji: "日", English: "day"},
+		{ID: "2", Kanji: "月", English: "moon"},
+		{ID: "3", Kanji: "火", English: "fire"},
+	}
+	m.browseCursor = 0
+
+	m, _ = updateModel(m, keyMsg("down"))
+	if m.browseCursor != 1 {
+		t.Errorf("expected cursor=1 after down, got %d", m.browseCursor)
+	}
+
+	m, _ = updateModel(m, keyMsg("j"))
+	if m.browseCursor != 2 {
+		t.Errorf("expected cursor=2 after j, got %d", m.browseCursor)
+	}
+
+	// 下限で止まる
+	m, _ = updateModel(m, keyMsg("down"))
+	if m.browseCursor != 2 {
+		t.Errorf("expected cursor=2 at bottom, got %d", m.browseCursor)
+	}
+
+	m, _ = updateModel(m, keyMsg("up"))
+	if m.browseCursor != 1 {
+		t.Errorf("expected cursor=1 after up, got %d", m.browseCursor)
+	}
+}
+
+func TestAddCardValidationEmpty(t *testing.T) {
+	m := New()
+	m = m.startAddCard()
+
+	// 空のまま保存を試みる
+	m = m.saveAddCard()
+
+	if !strings.Contains(m.addMessage, "required") {
+		t.Errorf("expected validation error, got %q", m.addMessage)
+	}
+}
+
+func TestQuitFromMenu(t *testing.T) {
+	m := New()
+	m.cursor = 5 // Quit
+	m, cmd := updateModel(m, keyMsg("enter"))
+
+	if !m.quitting {
+		t.Errorf("expected quitting=true")
+	}
+	if cmd == nil {
+		t.Errorf("expected quit command")
+	}
+}
+
+func TestCtrlCQuits(t *testing.T) {
+	m := New()
+	m, cmd := updateModel(m, keyMsg("ctrl+c"))
+
+	if !m.quitting {
+		t.Errorf("expected quitting=true on ctrl+c")
+	}
+	if cmd == nil {
+		t.Errorf("expected quit command")
+	}
+}
+
+// keyMsg はテスト用のキーメッセージを生成する
+func keyMsg(key string) tea.KeyMsg {
+	switch key {
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEscape}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "ctrl+c":
+		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case " ":
+		return tea.KeyMsg{Type: tea.KeySpace}
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+	}
 }
