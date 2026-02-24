@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,6 +38,14 @@ const (
 	ioModePath
 )
 
+type reviewMode int
+
+const (
+	reviewModeRecognition reviewMode = iota
+	reviewModeProduction
+	reviewModeCloze
+)
+
 type Model struct {
 	choices      []string
 	cursor       int
@@ -46,11 +55,13 @@ type Model struct {
 	dataDir      string
 	cards        []domain.Card
 	reviewQueue  []domain.Card
+	reviewModes  []reviewMode
 	reviewOrder  []int
 	reviewIndex  int
 	reveal       bool
 	reviewErr    error
 	session      domain.SessionStats
+	rng          *rand.Rand
 	addInputs    []textinput.Model
 	addFocus     int
 	addMessage   string
@@ -77,6 +88,7 @@ func New() Model {
 		cursor:   0,
 		selected: -1,
 		screen:   screenMenu,
+		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -334,17 +346,47 @@ func (m Model) reviewView() string {
 			builder.WriteString(view.SubtitleStyle.Render("Session complete.") + "\n")
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
-			builder.WriteString(view.SubtitleStyle.Render(card.Kanji) + "\n")
-			if card.Hiragana != nil {
-				builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
-			}
-			if card.Usage != "" {
-				builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
-			}
-			if m.reveal {
-				builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
-			} else {
-				builder.WriteString("(press space to flip)\n")
+			switch m.currentReviewMode() {
+			case reviewModeProduction:
+				if m.reveal {
+					builder.WriteString(view.SubtitleStyle.Render(card.Kanji) + "\n")
+					if card.Hiragana != nil {
+						builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
+					}
+					if card.Usage != "" {
+						builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
+					}
+				} else {
+					builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
+					builder.WriteString("(press space to flip)\n")
+				}
+			case reviewModeCloze:
+				if m.reveal {
+					builder.WriteString(view.ValueStyle.Render(clozeBack(card)) + "\n")
+				} else {
+					if card.Usage != "" {
+						builder.WriteString(view.ValueStyle.Render(clozeFront(card.Usage, card.Kanji, card.Hiragana)) + "\n")
+					} else {
+						builder.WriteString(view.HighlightStyle.Render(card.Kanji) + "\n")
+					}
+					builder.WriteString("(press space to flip)\n")
+				}
+			default:
+				if m.reveal {
+					if card.Hiragana != nil {
+						builder.WriteString(view.ValueStyle.Render(*card.Hiragana) + "\n")
+					} else {
+						builder.WriteString(view.ValueStyle.Render(card.Kanji) + "\n")
+					}
+					builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
+				} else {
+					if card.Usage != "" {
+						builder.WriteString(fmt.Sprintf("%s\n", highlightUsage(card.Usage, card.Kanji, card.Hiragana)))
+					} else {
+						builder.WriteString(view.HighlightStyle.Render(card.Kanji) + "\n")
+					}
+					builder.WriteString("(press space to flip)\n")
+				}
 			}
 		}
 	}
@@ -583,6 +625,19 @@ func (m Model) startReview() Model {
 	m.state = normalizeState(state, domain.Today())
 	m.cards = cards
 	m.reviewQueue = domain.DueCards(cards, domain.Today())
+	m.reviewModes = make([]reviewMode, len(m.reviewQueue))
+	for i := range m.reviewModes {
+		roll := m.rng.Intn(100)
+		if roll < 10 {
+			m.reviewModes[i] = reviewModeRecognition
+			continue
+		}
+		if roll < 40 {
+			m.reviewModes[i] = reviewModeCloze
+			continue
+		}
+		m.reviewModes[i] = reviewModeProduction
+	}
 	m.reviewOrder = indicesForCards(cards, m.reviewQueue)
 	m.reviewIndex = 0
 	m.reveal = false
@@ -1023,6 +1078,31 @@ func (m Model) applyAnswer(correct bool) Model {
 	m.reviewIndex++
 	m.reveal = false
 	return m
+}
+
+func (m Model) currentReviewMode() reviewMode {
+	if m.reviewIndex < 0 || m.reviewIndex >= len(m.reviewModes) {
+		return reviewModeRecognition
+	}
+	return m.reviewModes[m.reviewIndex]
+}
+
+func clozeFront(sentence string, kanji string, hiragana *string) string {
+	hidden := sentence
+	if kanji != "" && strings.Contains(hidden, kanji) {
+		return strings.Replace(hidden, kanji, "（　）", 1)
+	}
+	if hiragana != nil && *hiragana != "" && strings.Contains(hidden, *hiragana) {
+		return strings.Replace(hidden, *hiragana, "（　）", 1)
+	}
+	return hidden
+}
+
+func clozeBack(card domain.Card) string {
+	if card.Hiragana != nil && *card.Hiragana != "" {
+		return fmt.Sprintf("%s, %s, %s", card.Kanji, card.English, *card.Hiragana)
+	}
+	return fmt.Sprintf("%s, %s", card.Kanji, card.English)
 }
 
 func (m Model) loadStats() Model {

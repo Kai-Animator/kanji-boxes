@@ -3,6 +3,7 @@ package model
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"kanji-boxes/domain"
@@ -38,6 +39,90 @@ func TestStartReviewBuildsDueQueue(t *testing.T) {
 	}
 	if m.reviewQueue[0].ID != "due" {
 		t.Fatalf("expected due card, got %s", m.reviewQueue[0].ID)
+	}
+	if len(m.reviewModes) != len(m.reviewQueue) {
+		t.Fatalf("expected review modes for each due card, got %d modes for %d cards", len(m.reviewModes), len(m.reviewQueue))
+	}
+}
+
+func TestReviewViewRecognitionMode(t *testing.T) {
+	hiragana := "にち"
+	card := domain.Card{Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。"}
+
+	m := New()
+	m.reviewQueue = []domain.Card{card}
+	m.reviewModes = []reviewMode{reviewModeRecognition}
+	m.reviewIndex = 0
+
+	front := m.reviewView()
+	if !strings.Contains(front, "が昇る。") {
+		t.Fatalf("expected recognition front to show usage sentence, got %q", front)
+	}
+	if strings.Contains(front, "day") {
+		t.Fatalf("expected recognition front to hide english, got %q", front)
+	}
+	if strings.Contains(front, "にち") {
+		t.Fatalf("expected recognition front to hide hiragana, got %q", front)
+	}
+
+	m.reveal = true
+	back := m.reviewView()
+	if !strings.Contains(back, "day") || !strings.Contains(back, "にち") {
+		t.Fatalf("expected recognition back to show hiragana and english, got %q", back)
+	}
+	if strings.Contains(back, "が昇る。") {
+		t.Fatalf("expected recognition back to hide usage sentence, got %q", back)
+	}
+}
+
+func TestReviewViewProductionMode(t *testing.T) {
+	hiragana := "にち"
+	card := domain.Card{Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。"}
+
+	m := New()
+	m.reviewQueue = []domain.Card{card}
+	m.reviewModes = []reviewMode{reviewModeProduction}
+	m.reviewIndex = 0
+
+	front := m.reviewView()
+	if !strings.Contains(front, "day") {
+		t.Fatalf("expected production front to show english, got %q", front)
+	}
+	if strings.Contains(front, "にち") {
+		t.Fatalf("expected production front to hide japanese, got %q", front)
+	}
+	if strings.Contains(front, "が昇る。") {
+		t.Fatalf("expected production front to hide usage sentence, got %q", front)
+	}
+
+	m.reveal = true
+	back := m.reviewView()
+	if !strings.Contains(back, "日") || !strings.Contains(back, "にち") || !strings.Contains(back, "が昇る。") {
+		t.Fatalf("expected production back to show japanese details, got %q", back)
+	}
+}
+
+func TestReviewViewClozeMode(t *testing.T) {
+	hiragana := "だいじ"
+	card := domain.Card{Kanji: "大事", Hiragana: &hiragana, English: "importance", Usage: "体が大事にしないと病気なります。"}
+
+	m := New()
+	m.reviewQueue = []domain.Card{card}
+	m.reviewModes = []reviewMode{reviewModeCloze}
+	m.reviewIndex = 0
+
+	front := m.reviewView()
+	if !strings.Contains(front, "体が（　）にしないと病気なります。") {
+		t.Fatalf("expected cloze front to hide japanese word in usage, got %q", front)
+	}
+	if strings.Contains(front, "importance") {
+		t.Fatalf("expected cloze front to hide english, got %q", front)
+	}
+
+	m.reveal = true
+	back := m.reviewView()
+	if !strings.Contains(back, "大事, importance, だいじ") {
+		t.Fatalf("expected cloze back to show japanese, english, and hiragana, got %q", back)
 	}
 }
 
