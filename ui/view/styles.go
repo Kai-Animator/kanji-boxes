@@ -25,6 +25,7 @@ var (
 	BoxStyle3 = lipgloss.NewStyle().Foreground(lipgloss.Color("220")) // 黄色 - ボックス3
 	BoxStyle4 = lipgloss.NewStyle().Foreground(lipgloss.Color("118")) // 黄緑 - ボックス4
 	BoxStyle5 = lipgloss.NewStyle().Foreground(lipgloss.Color("46"))  // 緑 - ボックス5（習得済み）
+	BoxStyle6 = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))  // 水色 - ボックス6（長期記憶）
 
 	// レビューモード表示
 	RecognitionModeStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("135")) // 紫
@@ -71,6 +72,8 @@ func BoxStyleForLevel(box int) lipgloss.Style {
 		return BoxStyle4
 	case 5:
 		return BoxStyle5
+	case 6:
+		return BoxStyle6
 	default:
 		return BoxStyle1
 	}

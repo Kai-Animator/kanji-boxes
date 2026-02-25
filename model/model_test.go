@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -128,6 +129,30 @@ func TestReviewViewClozeMode(t *testing.T) {
 	}
 }
 
+func TestReviewViewShowsElapsedTime(t *testing.T) {
+	hiragana := "にち"
+	card := domain.Card{Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。"}
+
+	start := time.Date(2026, 2, 4, 12, 0, 0, 0, time.UTC)
+	m := New()
+	m.now = func() time.Time { return start.Add(2500 * time.Millisecond) }
+	m.reviewCardAt = start
+	m.reviewQueue = []domain.Card{card}
+	m.reviewModes = []reviewMode{reviewModeRecognition}
+	m.reviewIndex = 0
+
+	view := m.reviewView()
+	if !strings.Contains(view, "Elapsed:") {
+		t.Fatalf("expected elapsed label, got %q", view)
+	}
+	if !strings.Contains(view, "2.5s") {
+		t.Fatalf("expected formatted elapsed time, got %q", view)
+	}
+	if !strings.Contains(view, "<=3s advances") {
+		t.Fatalf("expected elapsed threshold hint, got %q", view)
+	}
+}
+
 func TestApplyAnswerUpdatesStatsAndPersists(t *testing.T) {
 	dataDir := tempDataDir(t)
 	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
@@ -158,6 +183,58 @@ func TestApplyAnswerUpdatesStatsAndPersists(t *testing.T) {
 	stats := state.DailyStats[today.String()]
 	if stats.Reviewed != 1 || stats.Correct != 1 || stats.Incorrect != 0 {
 		t.Fatalf("unexpected persisted stats: %+v", stats)
+	}
+}
+
+func TestApplyAnswerCorrectFastMovesToNextBox(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	cards := []domain.Card{
+		{ID: "due", Kanji: "日", English: "day", Box: 2, CreatedAt: today, NextDue: today},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	start := time.Date(2026, 2, 4, 12, 0, 0, 0, time.UTC)
+	m := New()
+	m.now = func() time.Time { return start }
+	m = m.startReview()
+	m.now = func() time.Time { return start.Add(2 * time.Second) }
+	m = m.applyAnswer(true)
+
+	if got := m.cards[0].Box; got != 3 {
+		t.Fatalf("expected box 3, got %d", got)
+	}
+}
+
+func TestApplyAnswerCorrectSlowStaysInSameBox(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	cards := []domain.Card{
+		{ID: "due", Kanji: "日", English: "day", Box: 2, CreatedAt: today, NextDue: today},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	start := time.Date(2026, 2, 4, 12, 0, 0, 0, time.UTC)
+	m := New()
+	m.now = func() time.Time { return start }
+	m = m.startReview()
+	m.now = func() time.Time { return start.Add(4 * time.Second) }
+	m = m.applyAnswer(true)
+
+	if got := m.cards[0].Box; got != 2 {
+		t.Fatalf("expected box 2, got %d", got)
 	}
 }
 

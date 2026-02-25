@@ -66,6 +66,7 @@ type Model struct {
 	reviewModes  []reviewMode
 	reviewOrder  []int
 	reviewIndex  int
+	reviewCardAt time.Time
 	reveal       bool
 	reviewErr    error
 	session      domain.SessionStats
@@ -89,6 +90,7 @@ type Model struct {
 	ioInput      textinput.Model
 	ioMessage    string
 	ioErr        error
+	now          func() time.Time
 }
 
 func New() Model {
@@ -98,6 +100,7 @@ func New() Model {
 		selected: -1,
 		screen:   screenMenu,
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		now:      time.Now,
 	}
 }
 
@@ -373,6 +376,7 @@ func (m Model) reviewView() string {
 			modeBadge := m.reviewModeBadge()
 			boxStyle := view.BoxStyleForLevel(card.Box)
 			builder.WriteString(modeBadge + " " + view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", card.Box)) + "\n\n")
+			builder.WriteString(view.LabelStyle.Render("Elapsed: ") + view.ValueStyle.Render(formatElapsed(m.currentElapsed())) + " " + view.HintStyle.Render("(<=3s advances)") + "\n\n")
 
 			switch m.currentReviewMode() {
 			case reviewModeProduction:
@@ -703,6 +707,7 @@ func (m Model) startReview() Model {
 	}
 	m.reviewOrder = indicesForCards(cards, m.reviewQueue)
 	m.reviewIndex = 0
+	m.reviewCardAt = m.now()
 	m.reveal = false
 	m.stateWarning = ""
 	m.session = m.state.DailyStats[domain.Today().String()]
@@ -1122,7 +1127,15 @@ func indicesForCards(all []domain.Card, subset []domain.Card) []int {
 
 func (m Model) applyAnswer(correct bool) Model {
 	idx := m.reviewOrder[m.reviewIndex]
-	updated, err := domain.ApplyReview(m.cards[idx], correct, domain.Today())
+	answeredAt := m.now()
+	answerDuration := time.Duration(0)
+	if !m.reviewCardAt.IsZero() {
+		answerDuration = answeredAt.Sub(m.reviewCardAt)
+		if answerDuration < 0 {
+			answerDuration = 0
+		}
+	}
+	updated, err := domain.ApplyReview(m.cards[idx], correct, answerDuration, domain.Today())
 	if err != nil {
 		m.reviewErr = err
 		return m
@@ -1150,6 +1163,7 @@ func (m Model) applyAnswer(correct bool) Model {
 	}
 
 	m.reviewIndex++
+	m.reviewCardAt = answeredAt
 	m.reveal = false
 	return m
 }
@@ -1159,6 +1173,25 @@ func (m Model) currentReviewMode() reviewMode {
 		return reviewModeRecognition
 	}
 	return m.reviewModes[m.reviewIndex]
+}
+
+func (m Model) currentElapsed() time.Duration {
+	if m.reviewCardAt.IsZero() {
+		return 0
+	}
+	now := time.Now
+	if m.now != nil {
+		now = m.now
+	}
+	elapsed := now().Sub(m.reviewCardAt)
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
+}
+
+func formatElapsed(elapsed time.Duration) string {
+	return fmt.Sprintf("%.1fs", elapsed.Seconds())
 }
 
 func clozeFront(sentence string, kanji string, hiragana *string) string {
