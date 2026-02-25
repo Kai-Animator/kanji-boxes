@@ -1,7 +1,7 @@
-.PHONY: build test lint fmt coverage run typecheck clean
+.PHONY: build install test lint fmt coverage run typecheck clean
 
 # バイナリ名
-BINARY := kanji-boxes
+BINARY := kanji-box
 
 # バージョン情報（gitタグまたはコミットハッシュ）
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -46,6 +46,11 @@ coverage-text:
 # 実行
 run:
 	go run .
+
+# インストール
+install:
+	mkdir -p "$(HOME)/.local/bin"
+	go build $(LDFLAGS) -o "$(HOME)/.local/bin/$(BINARY)" .
 
 # クリーン
 clean:
