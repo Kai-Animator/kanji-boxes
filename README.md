@@ -1,6 +1,15 @@
 # Kanji Boxes
 
-Bubble Tea TUI for a 5-box kanji spaced-repetition trainer.
+Bubble Tea TUI for a 6-box kanji spaced-repetition trainer.
+
+Current review intervals by box:
+
+- Box 1: 1 day
+- Box 2: 3 days
+- Box 3: 7 days
+- Box 4: 14 days
+- Box 5: 30 days
+- Box 6: 60 days
 
 ## Requirements
 
@@ -18,11 +27,19 @@ go mod download
 go run .
 ```
 
+Or build and run the binary directly:
+
+```bash
+make build
+./kanji-box
+```
+
 ## Install (Run From Anywhere)
 
 ```bash
-GOBIN="$HOME/.local/bin" go install .
+make install
 export PATH="$HOME/.local/bin:$PATH"
+kanji-box
 ```
 
 Add the PATH export to your shell profile (e.g. `~/.zshrc`) to make it permanent.
@@ -38,7 +55,7 @@ By default, data is stored under your OS user config directory:
 Override the data directory with:
 
 ```bash
-KANJI_BOXES_DIR=/path/to/data go run .
+KANJI_BOXES_DIR=/path/to/data kanji-box
 ```
 
 Files:

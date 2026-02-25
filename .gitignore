@@ -1,6 +1,7 @@
 # Build outputs
 kanji-box
 kanji-boxes
+makefile
 
 # OS files
 .DS_Store
