@@ -275,6 +275,83 @@ func TestEditCardUpdatesFields(t *testing.T) {
 	if updated[0].ID != "edit" {
 		t.Fatalf("expected id preserved, got %s", updated[0].ID)
 	}
+	if updated[0].Box != domain.BoxMin {
+		t.Fatalf("expected box unchanged, got %d", updated[0].Box)
+	}
+	if updated[0].NextDue != today {
+		t.Fatalf("expected next due unchanged, got %s", updated[0].NextDue)
+	}
+}
+
+func TestEditCardUpdatesBoxAndResetsNextDue(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	future, err := today.AddDays(10)
+	if err != nil {
+		t.Fatalf("add days: %v", err)
+	}
+
+	cards := []domain.Card{
+		{ID: "edit", Kanji: "日", English: "day", Box: 5, CreatedAt: today, NextDue: future},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m = m.startBrowse()
+	m = m.startEditCard(m.browseCards[0])
+	m.editInputs[5].SetValue("2")
+	m.editInputs[6].SetValue("y")
+	m = m.saveEditCard()
+
+	updated, err := storage.LoadCards(storage.CardsPath(dataDir))
+	if err != nil {
+		t.Fatalf("load cards: %v", err)
+	}
+	if updated[0].Box != 2 {
+		t.Fatalf("expected box 2, got %d", updated[0].Box)
+	}
+	if updated[0].NextDue != today {
+		t.Fatalf("expected next due reset to today, got %s", updated[0].NextDue)
+	}
+}
+
+func TestEditCardRejectsInvalidBox(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	cards := []domain.Card{
+		{ID: "edit", Kanji: "日", English: "day", Box: domain.BoxMin, CreatedAt: today, NextDue: today},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m = m.startBrowse()
+	m = m.startEditCard(m.browseCards[0])
+	m.editInputs[5].SetValue("99")
+	m = m.saveEditCard()
+
+	if !strings.Contains(m.editMessage, "Box must be between") {
+		t.Fatalf("expected box validation message, got %q", m.editMessage)
+	}
+
+	updated, err := storage.LoadCards(storage.CardsPath(dataDir))
+	if err != nil {
+		t.Fatalf("load cards: %v", err)
+	}
+	if updated[0].Box != domain.BoxMin {
+		t.Fatalf("expected box unchanged after validation error, got %d", updated[0].Box)
+	}
 }
 
 func TestDeleteSelectedCardRemovesCard(t *testing.T) {

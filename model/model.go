@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -598,7 +599,7 @@ func (m Model) editCardView() string {
 	var builder strings.Builder
 	builder.WriteString(view.TitleStyle.Render("Edit Card") + "\n\n")
 	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n\n")
-	labels := []string{"Kanji*", "English*", "Hiragana", "Usage sentence", "Tags (| separated)"}
+	labels := []string{"Kanji*", "English*", "Hiragana", "Usage sentence", "Tags (| separated)", "Box level", "Reset next due (y/N)"}
 	for i, input := range m.editInputs {
 		inputStyle := view.InputStyle
 		if i == m.editFocus {
@@ -612,7 +613,7 @@ func (m Model) editCardView() string {
 		builder.WriteString(statusMessageStyle(m.editMessage).Render(m.editMessage) + "\n\n")
 	}
 	builder.WriteString("\n")
-	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • esc: back • q: quit") + "\n")
+	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • reset next due: y/yes/true/1 • esc: back • q: quit") + "\n")
 	return builder.String()
 }
 
@@ -745,7 +746,7 @@ func (m Model) startAddCard() Model {
 }
 
 func (m Model) startEditCard(card domain.Card) Model {
-	inputs := make([]textinput.Model, 5)
+	inputs := make([]textinput.Model, 7)
 	for i := range inputs {
 		input := textinput.New()
 		input.CharLimit = 120
@@ -767,6 +768,11 @@ func (m Model) startEditCard(card domain.Card) Model {
 		case 4:
 			input.Placeholder = "例: colors|jlpt5"
 			input.SetValue(strings.Join(card.Tags, "|"))
+		case 5:
+			input.Placeholder = fmt.Sprintf("%d-%d", domain.BoxMin, domain.BoxMax)
+			input.SetValue(fmt.Sprintf("%d", card.Box))
+		case 6:
+			input.Placeholder = "y/N"
 		}
 		inputs[i] = input
 	}
@@ -955,7 +961,7 @@ func (m Model) saveAddCard() Model {
 }
 
 func (m Model) saveEditCard() Model {
-	input := parseCardInputs(m.editInputs)
+	input := parseCardInputs(m.editInputs[:5])
 
 	if input.kanji == "" || input.english == "" {
 		m.editMessage = "Kanji and English are required."
@@ -974,6 +980,15 @@ func (m Model) saveEditCard() Model {
 		return m
 	}
 
+	boxInput := strings.TrimSpace(m.editInputs[5].Value())
+	box, err := strconv.Atoi(boxInput)
+	if err != nil || box < domain.BoxMin || box > domain.BoxMax {
+		m.editMessage = fmt.Sprintf("Box must be between %d and %d.", domain.BoxMin, domain.BoxMax)
+		return m
+	}
+
+	resetNextDue := shouldResetNextDue(m.editInputs[6].Value())
+
 	updated := false
 	for i := range cards {
 		if cards[i].ID == m.editID {
@@ -982,6 +997,10 @@ func (m Model) saveEditCard() Model {
 			cards[i].Hiragana = input.hiragana
 			cards[i].Usage = input.usage
 			cards[i].Tags = input.tags
+			cards[i].Box = box
+			if resetNextDue {
+				cards[i].NextDue = domain.Today()
+			}
 			updated = true
 			break
 		}
@@ -999,6 +1018,15 @@ func (m Model) saveEditCard() Model {
 	m = m.startBrowse()
 	m.screen = screenBrowse
 	return m
+}
+
+func shouldResetNextDue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "y", "yes", "true", "1":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m Model) performImportExport() Model {
