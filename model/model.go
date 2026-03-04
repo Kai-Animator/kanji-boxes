@@ -75,6 +75,7 @@ type Model struct {
 	addInputs    []textinput.Model
 	addFocus     int
 	addMessage   string
+	aiBusy       bool
 	editInputs   []textinput.Model
 	editFocus    int
 	editMessage  string
@@ -94,6 +95,15 @@ type Model struct {
 	now          func() time.Time
 }
 
+const (
+	addKanjiField = iota
+	addEnglishField
+	addHiraganaField
+	addUsageField
+	addTagsField
+	addFieldCount
+)
+
 func New() Model {
 	return Model{
 		choices:  []string{"Review", "Add Card", "Browse", "Import / Export", "Stats", "Quit"},
@@ -111,6 +121,24 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case aiFillResultMsg:
+		m.aiBusy = false
+		if msg.err != nil {
+			m.addMessage = "AI fill failed: " + msg.err.Error()
+			return m, nil
+		}
+		for index, value := range msg.values {
+			if index < 0 || index >= len(m.addInputs) {
+				continue
+			}
+			m.addInputs[index].SetValue(value)
+		}
+		if len(msg.values) == 0 {
+			m.addMessage = "No values generated."
+		} else {
+			m.addMessage = "AI suggestion ready. Review and edit any field before saving."
+		}
+		return m, nil
 	case tea.KeyMsg:
 		key := msg.String()
 		switch key {
@@ -183,6 +211,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch key {
 			case "esc":
 				m.screen = screenMenu
+			case "ctrl+f":
+				updated, cmd := m.requestAIFillMissing()
+				return updated, cmd
+			case "ctrl+r":
+				updated, cmd := m.requestAIFillFocused()
+				return updated, cmd
 			case "tab", "shift+tab", "up", "down":
 				m = m.moveAddFocus(key)
 			case "enter":
@@ -527,8 +561,11 @@ func (m Model) addCardView() string {
 	if m.addMessage != "" {
 		builder.WriteString(statusMessageStyle(m.addMessage).Render(m.addMessage) + "\n\n")
 	}
+	if m.aiBusy {
+		builder.WriteString(view.HintStyle.Render("AI is generating suggestions...") + "\n\n")
+	}
 	builder.WriteString("\n")
-	builder.WriteString(view.HintStyle.Render("tab: next • enter: save • esc: back • q: quit") + "\n")
+	builder.WriteString(view.HintStyle.Render("ctrl+f: fill missing • ctrl+r: regenerate focused • enter: save • esc: back • q: quit") + "\n")
 	return builder.String()
 }
 
@@ -719,20 +756,20 @@ func (m Model) startReview() Model {
 }
 
 func (m Model) startAddCard() Model {
-	inputs := make([]textinput.Model, 5)
+	inputs := make([]textinput.Model, addFieldCount)
 	for i := range inputs {
 		input := textinput.New()
 		input.CharLimit = 120
 		switch i {
-		case 0:
+		case addKanjiField:
 			input.Placeholder = "例: 赤"
-		case 1:
+		case addEnglishField:
 			input.Placeholder = "例: red"
-		case 2:
+		case addHiraganaField:
 			input.Placeholder = "例: あか"
-		case 3:
+		case addUsageField:
 			input.Placeholder = "例: 赤いシャツをあげます。"
-		case 4:
+		case addTagsField:
 			input.Placeholder = "例: colors|jlpt5"
 		}
 		inputs[i] = input
@@ -742,6 +779,7 @@ func (m Model) startAddCard() Model {
 	m.addInputs = inputs
 	m.addFocus = 0
 	m.addMessage = ""
+	m.aiBusy = false
 	return m
 }
 
@@ -881,11 +919,11 @@ type cardInput struct {
 
 // parseCardInputs はテキスト入力からカードデータを抽出する
 func parseCardInputs(inputs []textinput.Model) cardInput {
-	kanji := strings.TrimSpace(inputs[0].Value())
-	english := strings.TrimSpace(inputs[1].Value())
-	hiragana := strings.TrimSpace(inputs[2].Value())
-	usage := strings.TrimSpace(inputs[3].Value())
-	tagsInput := strings.TrimSpace(inputs[4].Value())
+	kanji := strings.TrimSpace(inputs[addKanjiField].Value())
+	english := strings.TrimSpace(inputs[addEnglishField].Value())
+	hiragana := strings.TrimSpace(inputs[addHiraganaField].Value())
+	usage := strings.TrimSpace(inputs[addUsageField].Value())
+	tagsInput := strings.TrimSpace(inputs[addTagsField].Value())
 
 	var hiraPtr *string
 	if hiragana != "" {
@@ -917,6 +955,11 @@ func parseTags(input string) []string {
 }
 
 func (m Model) saveAddCard() Model {
+	if m.aiBusy {
+		m.addMessage = "Please wait for AI generation to finish."
+		return m
+	}
+
 	input := parseCardInputs(m.addInputs)
 
 	if input.kanji == "" || input.english == "" {

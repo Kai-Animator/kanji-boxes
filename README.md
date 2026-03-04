@@ -71,6 +71,13 @@ Files:
 - `enter`: select
 - `q`: quit
 
+### Add Card
+
+- Set `OPENAI_API_KEY` in your shell before running the app
+- `ctrl+f`: autofill all missing card fields from what you already typed
+- `ctrl+r`: regenerate only the currently focused card field
+- `enter`: save card
+
 ### Review
 
 - `space`: flip card

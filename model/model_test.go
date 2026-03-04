@@ -682,6 +682,44 @@ func TestAddCardValidationEmpty(t *testing.T) {
 	}
 }
 
+func TestRequestAIFillRequiresAPIKey(t *testing.T) {
+	defer os.Unsetenv("OPENAI_API_KEY")
+	if err := os.Unsetenv("OPENAI_API_KEY"); err != nil {
+		t.Fatalf("unset env: %v", err)
+	}
+
+	m := New()
+	m = m.startAddCard()
+	m.addInputs[addKanjiField].SetValue("火")
+
+	updated, cmd := m.requestAIFillMissing()
+	if cmd != nil {
+		t.Fatalf("expected nil cmd when key is missing")
+	}
+	if !strings.Contains(updated.addMessage, "OPENAI_API_KEY is required") {
+		t.Fatalf("expected missing key message, got %q", updated.addMessage)
+	}
+}
+
+func TestRequestAIFillUsesEnvAPIKey(t *testing.T) {
+	if err := os.Setenv("OPENAI_API_KEY", "sk-test-key"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	defer os.Unsetenv("OPENAI_API_KEY")
+
+	m := New()
+	m = m.startAddCard()
+	m.addInputs[addKanjiField].SetValue("火")
+
+	updated, cmd := m.requestAIFillMissing()
+	if cmd == nil {
+		t.Fatalf("expected command when OPENAI_API_KEY is set")
+	}
+	if !updated.aiBusy {
+		t.Fatalf("expected aiBusy=true after requesting fill")
+	}
+}
+
 func TestQuitFromMenu(t *testing.T) {
 	m := New()
 	m.cursor = 5 // Quit
