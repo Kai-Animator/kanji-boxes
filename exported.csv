@@ -1,29 +1,28 @@
 kanji,hiragana,english,usage,tags,box
-赤,あか,Red,赤いトマトです,,1
-取得,シュトク,Obtained,,,1
-済み,ずみ,Done／Settled/ Arranged,,,1
+取得,シュトク,Obtained,,,2
+済み,ずみ,Done／Settled/ Arranged,,,5
 受講,じゅこう,Taught／Lesson,,,1
-未取得,みしゅとく,Not Obtained,,,1
-未受講,みじゅこう,Not Taught,,,1
-発生,Hassei,Occurrence,,,1
-研修,kenshuu,Training,,,1
-期限,Kigen,Deadline,,,1
-条件,Jouken,Conditions,,,1
+未取得,みしゅとく,Not Obtained,,,5
+未受講,みじゅこう,Not Taught,,,4
+発生,Hassei,Occurrence,,,4
+研修,kenshuu,Training,,,5
+期限,Kigen,Deadline,,,4
+条件,Jouken,Conditions,,,3
 部署,Busho,Department,,,1
-役職,Yakushoku,Title,,,1
+役職,Yakushoku,Title,,,4
 拠点,Kyouten,Base,,,1
 不満,ふまん,Not satisfactory,不満の気持ちが強いとき使います,,1
-夫婦,ふうふ,Married couple,となりの夫婦、けんかばかりしているね。,,1
-告白,こくはく,Confess,告白しても拘(こだわ)られってばかりみたいです。,,1
+夫婦,ふうふ,Married couple,となりの夫婦、けんかばかりしているね。,,2
+告白,こくはく,Confess,告白しても拘(こだわ)られってばかりみたいです。,,2
 運命,うんめい,Destiny,まだ運命の人に出会ってないって言いました。,,1
-聞き飽きる,ききあきる,Get tired of hearing,先生同じ話ばっかりだね。聞き飽きるよね。,,1
-あせる,あせる,panic - rush,田中さうわさ話をしているところに、本人が来ちゃって、あせったよ。,,1
-刃物,はもの,"Cutlery, edged tools",刃物を使っているところに、話かけないで下さい,,1
-カンニング,カンニング,"to cheat, on a test or be smart",カンニングしていいたところに先生が見られてしまった,,1
+聞き飽きる,ききあきる,Get tired of hearing,先生同じ話ばっかりだね。聞き飽きるよね。,,3
+あせる,あせる,panic - rush,田中さうわさ話をしているところに、本人が来ちゃって、あせったよ。,,2
+刃物,はもの,"Cutlery, edged tools",刃物を使っているところに、話かけないで下さい,,2
+カンニング,カンニング,"to cheat, on a test or be smart",カンニングしていいたところに先生が見られてしまった,,2
 着信,ちゃくしん,incomming call,電車に乗ったところに着信来ました,,1
-納期,のうき,day of deliver,明日納期なので終わらせましょう,,1
+納期,のうき,day of deliver,明日納期なので終わらせましょう,,2
 用件,ようけん,topic,急ぎの用件の時がどうすればいいですか。,,1
 高級,こうきゅう,"high end, luxury",高級な店,,1
-懐中電灯,かいちゅうでんとう,flashlight,懐中電灯持っていなかた時に自転車をのて警察怒られてしまいました。,,1
-考え事,かんがえごと,to think,考え事しているところです,,1
-数える,かぞえる,to count,数を数えっているところです,,1
+懐中電灯,かいちゅうでんとう,flashlight,懐中電灯持っていなかた時に自転車をのて警察怒られてしまいました。,,2
+考え事,かんがえごと,to think,考え事しているところです,,3
+数える,かぞえる,to count,数を数えっているところです,,2
