@@ -1078,8 +1078,12 @@ func (m Model) performImportExport() Model {
 
 	path := strings.TrimSpace(m.ioInput.Value())
 	if path == "" {
-		m.ioErr = fmt.Errorf("path is required")
-		return m
+		if m.ioAction == "export" {
+			path = "exported.csv"
+		} else {
+			m.ioErr = fmt.Errorf("path is required")
+			return m
+		}
 	}
 
 	dataDir, err := storage.ResolveDataDir("")

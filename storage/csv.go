@@ -3,12 +3,14 @@ package storage
 import (
 	"encoding/csv"
 	"io"
+	"strconv"
 	"strings"
 
 	"kanji-boxes/domain"
 )
 
-var csvHeader = []string{"kanji", "hiragana", "english", "usage", "tags"}
+var csvHeader = []string{"kanji", "hiragana", "english", "usage", "tags", "box"}
+var csvHeaderV1 = []string{"kanji", "hiragana", "english", "usage", "tags"}
 var csvHeaderLegacy = []string{"kanji", "hiragana", "english", "tags"}
 
 func ExportCardsCSV(writer io.Writer, cards []domain.Card) error {
@@ -28,6 +30,7 @@ func ExportCardsCSV(writer io.Writer, cards []domain.Card) error {
 			card.English,
 			card.Usage,
 			strings.Join(card.Tags, "|"),
+			strconv.Itoa(card.Box),
 		}
 		if err := csvWriter.Write(record); err != nil {
 			return err
@@ -49,14 +52,19 @@ func ImportCardsCSV(reader io.Reader, today domain.LocalDate) ([]domain.Card, er
 	}
 
 	startIndex := 0
-	columns := csvColumns{kanji: 0, hiragana: 1, english: 2, usage: -1, tags: 3}
+	// デフォルトはレガシー4カラム形式
+	columns := csvColumns{kanji: 0, hiragana: 1, english: 2, usage: -1, tags: 3, box: -1}
 	if isCSVHeader(records[0]) {
 		startIndex = 1
 		if matchCSVHeader(records[0], csvHeader) {
-			columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4}
+			columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4, box: 5}
+		} else if matchCSVHeader(records[0], csvHeaderV1) {
+			columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4, box: -1}
 		}
+	} else if len(records[0]) >= 6 {
+		columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4, box: 5}
 	} else if len(records[0]) >= 5 {
-		columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4}
+		columns = csvColumns{kanji: 0, hiragana: 1, english: 2, usage: 3, tags: 4, box: -1}
 	}
 
 	cards := make([]domain.Card, 0, len(records))
@@ -79,13 +87,21 @@ func ImportCardsCSV(reader io.Reader, today domain.LocalDate) ([]domain.Card, er
 			tags = strings.Split(value, "|")
 		}
 
+		// boxカラムがあれば復元、なければデフォルト値を使用
+		box := domain.BoxMin
+		if boxStr := fieldAt(record, columns.box); boxStr != "" {
+			if b, err := strconv.Atoi(boxStr); err == nil && b >= domain.BoxMin && b <= domain.BoxMax {
+				box = b
+			}
+		}
+
 		cards = append(cards, domain.Card{
 			Kanji:     fieldAt(record, columns.kanji),
 			Hiragana:  hiragana,
 			English:   fieldAt(record, columns.english),
 			Usage:     usage,
 			Tags:      tags,
-			Box:       domain.BoxMin,
+			Box:       box,
 			CreatedAt: today,
 			NextDue:   today,
 		})
@@ -100,6 +116,7 @@ type csvColumns struct {
 	english  int
 	usage    int
 	tags     int
+	box      int
 }
 
 func fieldAt(record []string, index int) string {
@@ -110,7 +127,7 @@ func fieldAt(record []string, index int) string {
 }
 
 func isCSVHeader(record []string) bool {
-	return matchCSVHeader(record, csvHeader) || matchCSVHeader(record, csvHeaderLegacy)
+	return matchCSVHeader(record, csvHeader) || matchCSVHeader(record, csvHeaderV1) || matchCSVHeader(record, csvHeaderLegacy)
 }
 
 func matchCSVHeader(record []string, header []string) bool {
