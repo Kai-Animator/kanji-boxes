@@ -1121,22 +1121,36 @@ func (m Model) performImportExport() Model {
 			m.ioErr = err
 			return m
 		}
-		for i := range imported {
-			if imported[i].ID == "" {
-				imported[i].ID = fmt.Sprintf("card-%d", time.Now().UnixNano()+int64(i))
-			}
-		}
 		existing, err := storage.LoadCards(storage.CardsPath(dataDir))
 		if err != nil {
 			m.ioErr = err
 			return m
 		}
-		existing = append(existing, imported...)
+		// 既存カードのkanjiインデックスを構築
+		kanjiIndex := make(map[string]int, len(existing))
+		for i, c := range existing {
+			kanjiIndex[c.Kanji] = i
+		}
+		added := 0
+		updated := 0
+		for i, card := range imported {
+			if idx, found := kanjiIndex[card.Kanji]; found {
+				// 既存カードのboxを更新
+				existing[idx].Box = card.Box
+				updated++
+			} else {
+				if card.ID == "" {
+					card.ID = fmt.Sprintf("card-%d", time.Now().UnixNano()+int64(i))
+				}
+				existing = append(existing, card)
+				added++
+			}
+		}
 		if err := storage.SaveCards(storage.CardsPath(dataDir), existing); err != nil {
 			m.ioErr = err
 			return m
 		}
-		m.ioMessage = fmt.Sprintf("Imported %d cards.", len(imported))
+		m.ioMessage = fmt.Sprintf("Imported %d new, updated %d existing.", added, updated)
 	}
 
 	m.ioMode = ioModeSelect
