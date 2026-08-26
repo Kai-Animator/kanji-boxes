@@ -58,8 +58,11 @@ func TestReviewViewRecognitionMode(t *testing.T) {
 	m.reviewIndex = 0
 
 	front := m.reviewView()
-	if !strings.Contains(front, "が昇る。") {
-		t.Fatalf("expected recognition front to show usage sentence, got %q", front)
+	if !strings.Contains(front, "日") {
+		t.Fatalf("expected recognition front to show kanji, got %q", front)
+	}
+	if strings.Contains(front, "が昇る。") {
+		t.Fatalf("expected recognition front to hide usage sentence, got %q", front)
 	}
 	if strings.Contains(front, "day") {
 		t.Fatalf("expected recognition front to hide english, got %q", front)
@@ -73,8 +76,8 @@ func TestReviewViewRecognitionMode(t *testing.T) {
 	if !strings.Contains(back, "day") || !strings.Contains(back, "にち") {
 		t.Fatalf("expected recognition back to show hiragana and english, got %q", back)
 	}
-	if strings.Contains(back, "が昇る。") {
-		t.Fatalf("expected recognition back to hide usage sentence, got %q", back)
+	if !strings.Contains(back, "が昇る。") {
+		t.Fatalf("expected recognition back to show usage sentence, got %q", back)
 	}
 }
 

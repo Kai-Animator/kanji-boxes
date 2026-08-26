@@ -48,11 +48,12 @@ const (
 )
 
 // レビューモード重み付け（累積パーセンテージ）
-// 認識: 10%, 穴埋め: 30% (40-10), 産出: 60% (100-40)
+// 単語プロンプト中心にするため穴埋めは低頻度に抑える
+// 認識: 45%, 穴埋め: 10% (55-45), 産出: 45% (100-55)
 const (
-	recognitionThreshold = 10 // 0-9: 認識モード (10%)
-	clozeThreshold       = 40 // 10-39: 穴埋めモード (30%)
-	// 40-99: 産出モード (60%)
+	recognitionThreshold = 45 // 0-44: 認識モード (45%)
+	clozeThreshold       = 55 // 45-54: 穴埋めモード (10%)
+	// 55-99: 産出モード (45%)
 )
 
 type Model struct {
@@ -446,12 +447,11 @@ func (m Model) reviewView() string {
 						builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					}
 					builder.WriteString(view.ValueStyle.Render(card.English) + "\n")
-				} else {
 					if card.Usage != "" {
 						builder.WriteString(view.UsageStyle.Render(highlightUsage(card.Usage, card.Kanji, card.Hiragana)) + "\n")
-					} else {
-						builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					}
+				} else {
+					builder.WriteString(view.KanjiStyle.Render(card.Kanji) + "\n")
 					builder.WriteString(view.HintStyle.Render("(press space to flip)") + "\n")
 				}
 			}
