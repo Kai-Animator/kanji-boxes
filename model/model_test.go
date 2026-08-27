@@ -61,14 +61,14 @@ func TestReviewViewRecognitionMode(t *testing.T) {
 	if !strings.Contains(front, "日") {
 		t.Fatalf("expected recognition front to show kanji, got %q", front)
 	}
+	if !strings.Contains(front, "にち") {
+		t.Fatalf("expected recognition front to show hiragana, got %q", front)
+	}
 	if strings.Contains(front, "が昇る。") {
 		t.Fatalf("expected recognition front to hide usage sentence, got %q", front)
 	}
 	if strings.Contains(front, "day") {
 		t.Fatalf("expected recognition front to hide english, got %q", front)
-	}
-	if strings.Contains(front, "にち") {
-		t.Fatalf("expected recognition front to hide hiragana, got %q", front)
 	}
 
 	m.reveal = true
