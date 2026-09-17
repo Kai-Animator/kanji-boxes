@@ -1,6 +1,7 @@
 package model
 
 import (
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -767,5 +768,185 @@ func keyMsg(key string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+	}
+}
+
+func TestShuffleWithinDueGroupsKeepsDateOrder(t *testing.T) {
+	today := domain.Today()
+	yesterday, err := today.AddDays(-1)
+	if err != nil {
+		t.Fatalf("add days: %v", err)
+	}
+
+	cards := make([]domain.Card, 0, 12)
+	for i := 0; i < 6; i++ {
+		cards = append(cards, domain.Card{ID: string(rune('a' + i)), NextDue: yesterday})
+	}
+	for i := 0; i < 6; i++ {
+		cards = append(cards, domain.Card{ID: string(rune('m' + i)), NextDue: today})
+	}
+
+	shuffled := shuffleWithinDueGroups(cards, rand.New(rand.NewSource(1)))
+
+	if len(shuffled) != len(cards) {
+		t.Fatalf("expected %d cards, got %d", len(cards), len(shuffled))
+	}
+	for i := 0; i < 6; i++ {
+		if shuffled[i].NextDue != yesterday {
+			t.Fatalf("expected overdue cards first, got %s at %d", shuffled[i].NextDue, i)
+		}
+	}
+	for i := 6; i < 12; i++ {
+		if shuffled[i].NextDue != today {
+			t.Fatalf("expected today cards last, got %s at %d", shuffled[i].NextDue, i)
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, card := range shuffled {
+		seen[card.ID] = true
+	}
+	if len(seen) != len(cards) {
+		t.Fatalf("expected permutation, got duplicates: %+v", shuffled)
+	}
+
+	sameOrder := true
+	for i := range cards {
+		if cards[i].ID != shuffled[i].ID {
+			sameOrder = false
+			break
+		}
+	}
+	if sameOrder {
+		t.Fatalf("expected order to change within groups, got %+v", shuffled)
+	}
+}
+
+func TestStartReviewShufflesQueueWithinDueGroups(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	yesterday, err := today.AddDays(-1)
+	if err != nil {
+		t.Fatalf("add days: %v", err)
+	}
+
+	cards := []domain.Card{
+		{ID: "t1", Kanji: "月", English: "moon", Box: domain.BoxMin, CreatedAt: today, NextDue: today},
+		{ID: "y1", Kanji: "日", English: "day", Box: domain.BoxMin, CreatedAt: today, NextDue: yesterday},
+		{ID: "t2", Kanji: "火", English: "fire", Box: domain.BoxMin, CreatedAt: today, NextDue: today},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m = m.startReview()
+
+	if len(m.reviewQueue) != 3 {
+		t.Fatalf("expected 3 due cards, got %d", len(m.reviewQueue))
+	}
+	if m.reviewQueue[0].ID != "y1" {
+		t.Fatalf("expected overdue card first, got %s", m.reviewQueue[0].ID)
+	}
+	for i, idx := range m.reviewOrder {
+		if m.cards[idx].ID != m.reviewQueue[i].ID {
+			t.Fatalf("reviewOrder out of sync at %d: %s vs %s", i, m.cards[idx].ID, m.reviewQueue[i].ID)
+		}
+	}
+}
+
+func TestApplyAnswerTracksMissedCards(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	today := domain.Today()
+	hiragana := "にち"
+	cards := []domain.Card{
+		{ID: "miss", Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。", Box: 3, CreatedAt: today, NextDue: today},
+		{ID: "hit", Kanji: "月", English: "moon", Box: domain.BoxMin, CreatedAt: today, NextDue: today},
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m = m.startReview()
+	// キューはシャッフルされるため、ID で判定する
+	for m.reviewIndex < len(m.reviewQueue) {
+		m = m.applyAnswer(m.reviewQueue[m.reviewIndex].ID != "miss")
+	}
+
+	if len(m.sessionMisses) != 1 {
+		t.Fatalf("expected 1 missed card, got %d", len(m.sessionMisses))
+	}
+	if m.sessionMisses[0].ID != "miss" {
+		t.Fatalf("expected missed card 'miss', got %s", m.sessionMisses[0].ID)
+	}
+	if m.sessionMisses[0].Box != 2 {
+		t.Fatalf("expected missed card to reflect demoted box 2, got %d", m.sessionMisses[0].Box)
+	}
+}
+
+func TestReviewViewCompleteListsMissedCards(t *testing.T) {
+	hiragana := "にち"
+	missed := domain.Card{ID: "miss", Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。", Box: 2}
+
+	m := New()
+	m.reviewQueue = []domain.Card{missed}
+	m.reviewModes = []reviewMode{reviewModeRecognition}
+	m.reviewIndex = 1
+	m.sessionMisses = []domain.Card{missed}
+
+	view := m.reviewView()
+	if !strings.Contains(view, "Session complete!") {
+		t.Fatalf("expected completion message, got %q", view)
+	}
+	if !strings.Contains(view, "Missed cards") {
+		t.Fatalf("expected missed cards heading, got %q", view)
+	}
+	for _, want := range []string{"日", "にち", "day", "が昇る。"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected missed card detail %q, got %q", want, view)
+		}
+	}
+}
+
+func TestReviewViewCompleteNoMisses(t *testing.T) {
+	m := New()
+	m.reviewQueue = []domain.Card{{ID: "hit", Kanji: "月", English: "moon"}}
+	m.reviewModes = []reviewMode{reviewModeRecognition}
+	m.reviewIndex = 1
+	m.sessionMisses = nil
+
+	view := m.reviewView()
+	if strings.Contains(view, "Missed cards") {
+		t.Fatalf("expected no missed cards heading, got %q", view)
+	}
+	if !strings.Contains(view, "No misses") {
+		t.Fatalf("expected no-misses message, got %q", view)
+	}
+}
+
+func TestStartReviewResetsSessionMisses(t *testing.T) {
+	dataDir := tempDataDir(t)
+	if err := os.Setenv(storage.EnvDataDir, dataDir); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), []domain.Card{}); err != nil {
+		t.Fatalf("save cards: %v", err)
+	}
+
+	m := New()
+	m.sessionMisses = []domain.Card{{ID: "stale"}}
+	m = m.startReview()
+
+	if len(m.sessionMisses) != 0 {
+		t.Fatalf("expected misses reset on new session, got %d", len(m.sessionMisses))
 	}
 }

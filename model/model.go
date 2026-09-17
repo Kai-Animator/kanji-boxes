@@ -57,43 +57,44 @@ const (
 )
 
 type Model struct {
-	choices      []string
-	cursor       int
-	selected     int
-	quitting     bool
-	screen       screen
-	dataDir      string
-	cards        []domain.Card
-	reviewQueue  []domain.Card
-	reviewModes  []reviewMode
-	reviewOrder  []int
-	reviewIndex  int
-	reviewCardAt time.Time
-	reveal       bool
-	reviewErr    error
-	session      domain.SessionStats
-	rng          *rand.Rand
-	addInputs    []textinput.Model
-	addFocus     int
-	addMessage   string
-	aiBusy       bool
-	editInputs   []textinput.Model
-	editFocus    int
-	editMessage  string
-	editID       string
-	state        storage.AppState
-	stateErr     error
-	stateWarning string // 保存失敗時の警告メッセージ
-	browseCards  []domain.Card
-	browseErr    error
-	browseCursor int
-	ioMode       ioMode
-	ioAction     string
-	ioCursor     int
-	ioInput      textinput.Model
-	ioMessage    string
-	ioErr        error
-	now          func() time.Time
+	choices       []string
+	cursor        int
+	selected      int
+	quitting      bool
+	screen        screen
+	dataDir       string
+	cards         []domain.Card
+	reviewQueue   []domain.Card
+	reviewModes   []reviewMode
+	reviewOrder   []int
+	reviewIndex   int
+	reviewCardAt  time.Time
+	reveal        bool
+	reviewErr     error
+	session       domain.SessionStats
+	sessionMisses []domain.Card // 今回のセッションで不正解だったカード
+	rng           *rand.Rand
+	addInputs     []textinput.Model
+	addFocus      int
+	addMessage    string
+	aiBusy        bool
+	editInputs    []textinput.Model
+	editFocus     int
+	editMessage   string
+	editID        string
+	state         storage.AppState
+	stateErr      error
+	stateWarning  string // 保存失敗時の警告メッセージ
+	browseCards   []domain.Card
+	browseErr     error
+	browseCursor  int
+	ioMode        ioMode
+	ioAction      string
+	ioCursor      int
+	ioInput       textinput.Model
+	ioMessage     string
+	ioErr         error
+	now           func() time.Time
 }
 
 const (
@@ -405,6 +406,7 @@ func (m Model) reviewView() string {
 			builder.WriteString(view.SuccessStyle.Render("Session complete!") + "\n")
 			builder.WriteString(view.LabelStyle.Render("Correct: ") + view.CorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + " | ")
 			builder.WriteString(view.LabelStyle.Render("Incorrect: ") + view.IncorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Incorrect)) + "\n")
+			builder.WriteString(m.missedCardsView())
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
 
@@ -732,7 +734,9 @@ func (m Model) startReview() Model {
 	m.dataDir = dataDir
 	m.state = normalizeState(state, domain.Today())
 	m.cards = cards
-	m.reviewQueue = domain.DueCards(cards, domain.Today())
+	// 同じ期限日のカード内でシャッフルし、並び順の手がかりによる暗記を防ぐ
+	// 期限切れの古いカードを優先する順序は維持する
+	m.reviewQueue = shuffleWithinDueGroups(domain.DueCards(cards, domain.Today()), m.rng)
 	m.reviewModes = make([]reviewMode, len(m.reviewQueue))
 	for i := range m.reviewModes {
 		roll := m.rng.Intn(100)
@@ -751,6 +755,7 @@ func (m Model) startReview() Model {
 	m.reviewCardAt = m.now()
 	m.reveal = false
 	m.stateWarning = ""
+	m.sessionMisses = nil
 	m.session = m.state.DailyStats[domain.Today().String()]
 	if err := storage.SaveState(storage.StatePath(dataDir), m.state); err != nil {
 		m.stateWarning = "Warning: Failed to save state"
@@ -1217,6 +1222,55 @@ func indicesForCards(all []domain.Card, subset []domain.Card) []int {
 	return indices
 }
 
+// shuffleWithinDueGroups は期限日ごとのグループ内でカードをシャッフルする
+// 入力は期限日昇順にソート済みであることを前提とし、グループ間の順序は保つ
+func shuffleWithinDueGroups(cards []domain.Card, rng *rand.Rand) []domain.Card {
+	result := make([]domain.Card, len(cards))
+	copy(result, cards)
+
+	start := 0
+	for start < len(result) {
+		end := start + 1
+		for end < len(result) && result[end].NextDue.String() == result[start].NextDue.String() {
+			end++
+		}
+		group := result[start:end]
+		rng.Shuffle(len(group), func(i, j int) {
+			group[i], group[j] = group[j], group[i]
+		})
+		start = end
+	}
+	return result
+}
+
+// missedCardsView はセッション完了画面に不正解カードの一覧を描画する
+func (m Model) missedCardsView() string {
+	var builder strings.Builder
+	builder.WriteString("\n")
+
+	if len(m.sessionMisses) == 0 {
+		builder.WriteString(view.SuccessStyle.Render("No misses. Nice.") + "\n")
+		return builder.String()
+	}
+
+	builder.WriteString(view.SubtitleStyle.Render(fmt.Sprintf("Missed cards (%d)", len(m.sessionMisses))) + "\n")
+	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n")
+	for _, card := range m.sessionMisses {
+		boxStyle := view.BoxStyleForLevel(card.Box)
+		line := view.KanjiStyle.Render(card.Kanji)
+		if card.Hiragana != nil && *card.Hiragana != "" {
+			line += " " + view.HiraganaStyle.Render(*card.Hiragana)
+		}
+		line += "  " + view.ValueStyle.Render(card.English)
+		line += "  " + view.LabelStyle.Render("Box ") + boxStyle.Render(fmt.Sprintf("%d", card.Box))
+		builder.WriteString(line + "\n")
+		if card.Usage != "" {
+			builder.WriteString("  " + view.UsageStyle.Render(highlightUsage(card.Usage, card.Kanji, card.Hiragana)) + "\n")
+		}
+	}
+	return builder.String()
+}
+
 func (m Model) applyAnswer(correct bool) Model {
 	idx := m.reviewOrder[m.reviewIndex]
 	answeredAt := m.now()
@@ -1245,6 +1299,7 @@ func (m Model) applyAnswer(correct bool) Model {
 		m.session.Correct++
 	} else {
 		m.session.Incorrect++
+		m.sessionMisses = append(m.sessionMisses, updated)
 	}
 	if m.state.DailyStats == nil {
 		m.state.DailyStats = map[string]domain.SessionStats{}
