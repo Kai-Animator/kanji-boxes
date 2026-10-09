@@ -98,6 +98,8 @@ Files:
 
 ## Usage
 
+Run with no arguments to open the app. `--help` prints usage and the current data directory, and `--version` prints the version.
+
 `q` quits from any screen without a text field (menu, review, browse, stats). `ctrl+c` quits from anywhere.
 
 ### Main menu
