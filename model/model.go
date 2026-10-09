@@ -73,6 +73,7 @@ type Model struct {
 	reviewErr     error
 	session       domain.SessionStats
 	sessionMisses []domain.Card // 今回のセッションで不正解だったカード
+	reviewWaiting int           // ボックス1の上限で待機中のカード数
 	rng           *rand.Rand
 	addInputs     []textinput.Model
 	addFocus      int
@@ -84,10 +85,13 @@ type Model struct {
 	editID        string
 	state         storage.AppState
 	stateErr      error
-	stateWarning  string // 保存失敗時の警告メッセージ
-	browseCards   []domain.Card
+	stateWarning  string        // 保存失敗時の警告メッセージ
+	browseAll     []domain.Card // 絞り込み前の全カード
+	browseCards   []domain.Card // 検索で絞り込んだ表示用カード
 	browseErr     error
 	browseCursor  int
+	browseQuery   textinput.Model
+	browseSearch  bool // 検索入力中はキーを入力欄に渡す
 	ioMode        ioMode
 	ioAction      string
 	ioCursor      int
@@ -107,7 +111,7 @@ const (
 )
 
 func New() Model {
-	return Model{
+	m := Model{
 		choices:  []string{"Review", "Add Card", "Browse", "Import / Export", "Stats", "Quit"},
 		cursor:   0,
 		selected: -1,
@@ -115,6 +119,7 @@ func New() Model {
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		now:      time.Now,
 	}
+	return m.resetBrowseSearch()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -148,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "q":
-			if m.screen != screenAddCard && m.screen != screenImportExport && m.screen != screenEditCard {
+			if m.screen != screenAddCard && m.screen != screenImportExport && m.screen != screenEditCard && !(m.screen == screenBrowse && m.browseSearch) {
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -180,6 +185,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.startAddCard()
 				case "Browse":
 					m.screen = screenBrowse
+					m = m.resetBrowseSearch()
 					m = m.startBrowse()
 				case "Import / Export":
 					m.screen = screenImportExport
@@ -238,17 +244,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.addInputs[i], _ = m.addInputs[i].Update(msg)
 			}
 		case screenBrowse:
+			if m.browseSearch {
+				switch key {
+				case "esc":
+					// 入力中のescは検索を取り消す
+					m = m.resetBrowseSearch()
+					m = m.applyBrowseFilter()
+				case "enter":
+					// 絞り込みを保ったまま一覧操作に戻る
+					m.browseSearch = false
+					m.browseQuery.Blur()
+				case "up", "down":
+					m = m.moveBrowseCursor(key)
+				default:
+					m.browseQuery, _ = m.browseQuery.Update(msg)
+					m = m.applyBrowseFilter()
+				}
+				return m, nil
+			}
 			switch key {
+			case "/":
+				m.browseSearch = true
+				m.browseQuery.Focus()
 			case "esc":
-				m.screen = screenMenu
-			case "up", "k":
-				if m.browseCursor > 0 {
-					m.browseCursor--
+				if m.browseQuery.Value() != "" {
+					m = m.resetBrowseSearch()
+					m = m.applyBrowseFilter()
+				} else {
+					m.screen = screenMenu
 				}
-			case "down", "j":
-				if m.browseCursor < len(m.browseCards)-1 {
-					m.browseCursor++
-				}
+			case "up", "k", "down", "j":
+				m = m.moveBrowseCursor(key)
 			case "e":
 				if len(m.browseCards) > 0 {
 					m.screen = screenEditCard
@@ -394,6 +420,9 @@ func (m Model) reviewView() string {
 	}
 
 	builder.WriteString(view.LabelStyle.Render("Due cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.reviewQueue))) + "\n")
+	if m.reviewWaiting > 0 {
+		builder.WriteString(view.HintStyle.Render(fmt.Sprintf("%d new cards waiting for a box 1 slot", m.reviewWaiting)) + "\n")
+	}
 	if len(m.reviewQueue) == 0 {
 		builder.WriteString(view.SuccessStyle.Render("No cards due today.") + "\n")
 	} else {
@@ -584,15 +613,28 @@ func (m Model) browseView() string {
 		return builder.String()
 	}
 
+	if m.browseSearch || m.browseQuery.Value() != "" {
+		builder.WriteString(view.LabelStyle.Render("Search: ") + m.browseQuery.View() + "\n\n")
+	}
+
 	if len(m.browseCards) == 0 {
+		if m.browseQuery.Value() != "" {
+			builder.WriteString(view.HintStyle.Render("No matching cards.") + "\n\n")
+			builder.WriteString(view.HintStyle.Render(m.browseHint()) + "\n")
+			return builder.String()
+		}
 		builder.WriteString(view.SuccessStyle.Render("No cards available.") + "\n")
 		builder.WriteString("\n")
 		builder.WriteString(view.HintStyle.Render("esc: back • q: quit") + "\n")
 		return builder.String()
 	}
 
-	// カード数表示
-	builder.WriteString(view.LabelStyle.Render("Cards: ") + view.ValueStyle.Render(fmt.Sprintf("%d", len(m.browseCards))) + "\n\n")
+	// カード数表示（絞り込み中は全件数も表示）
+	count := fmt.Sprintf("%d", len(m.browseCards))
+	if len(m.browseCards) != len(m.browseAll) && len(m.browseAll) > 0 {
+		count = fmt.Sprintf("%d / %d", len(m.browseCards), len(m.browseAll))
+	}
+	builder.WriteString(view.LabelStyle.Render("Cards: ") + view.ValueStyle.Render(count) + "\n\n")
 
 	start := m.browseCursor - 5
 	if start < 0 {
@@ -633,8 +675,18 @@ func (m Model) browseView() string {
 	}
 
 	builder.WriteString("\n")
-	builder.WriteString(view.HintStyle.Render("up/down: move • e: edit • d: delete • esc: back • q: quit") + "\n")
+	builder.WriteString(view.HintStyle.Render(m.browseHint()) + "\n")
 	return builder.String()
+}
+
+func (m Model) browseHint() string {
+	if m.browseSearch {
+		return "type to filter • up/down: move • enter: done • esc: clear"
+	}
+	if m.browseQuery.Value() != "" {
+		return "up/down: move • /: search • e: edit • d: delete • esc: clear search • q: quit"
+	}
+	return "up/down: move • /: search • e: edit • d: delete • esc: back • q: quit"
 }
 
 func (m Model) editCardView() string {
@@ -736,7 +788,9 @@ func (m Model) startReview() Model {
 	m.cards = cards
 	// 同じ期限日のカード内でシャッフルし、並び順の手がかりによる暗記を防ぐ
 	// 期限切れの古いカードを優先する順序は維持する
-	m.reviewQueue = shuffleWithinDueGroups(domain.DueCards(cards, domain.Today()), m.rng)
+	// ボックス1の新規カードは上限内のみ出題し、残りは枠が空くまで待機させる
+	m.reviewQueue = shuffleWithinDueGroups(domain.DueCards(domain.ActiveCards(cards, domain.BoxOneCap), domain.Today()), m.rng)
+	m.reviewWaiting = domain.WaitingCount(cards, domain.BoxOneCap)
 	m.reviewModes = make([]reviewMode, len(m.reviewQueue))
 	for i := range m.reviewModes {
 		roll := m.rng.Intn(100)
@@ -847,9 +901,54 @@ func (m Model) startBrowse() Model {
 	}
 
 	m.dataDir = dataDir
-	m.browseCards = cards
+	m.browseAll = cards
+	m = m.applyBrowseFilter()
+	return m
+}
+
+// 端で折り返す（先頭で上→末尾、末尾で下→先頭）
+func (m Model) moveBrowseCursor(key string) Model {
+	count := len(m.browseCards)
+	if count == 0 {
+		return m
+	}
+	step := 1
+	if key == "up" || key == "k" {
+		step = -1
+	}
+	m.browseCursor = (m.browseCursor + step + count) % count
+	return m
+}
+
+func (m Model) resetBrowseSearch() Model {
+	input := textinput.New()
+	input.Placeholder = "kanji or hiragana"
+	input.CharLimit = 50
+	m.browseQuery = input
+	m.browseSearch = false
+	return m
+}
+
+// 検索語で一覧を絞り込み、カーソルを先頭に戻す
+func (m Model) applyBrowseFilter() Model {
+	m.browseCards = filterCards(m.browseAll, m.browseQuery.Value())
 	m.browseCursor = 0
 	return m
+}
+
+// 漢字または読みに部分一致するカードを返す（空の検索語は全件）
+func filterCards(cards []domain.Card, query string) []domain.Card {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return cards
+	}
+	filtered := make([]domain.Card, 0, len(cards))
+	for _, card := range cards {
+		if strings.Contains(card.Kanji, query) || (card.Hiragana != nil && strings.Contains(*card.Hiragana, query)) {
+			filtered = append(filtered, card)
+		}
+	}
+	return filtered
 }
 
 func (m Model) startImportExport() Model {

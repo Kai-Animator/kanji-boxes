@@ -662,15 +662,21 @@ func TestBrowseNavigation(t *testing.T) {
 		t.Errorf("expected cursor=2 after j, got %d", m.browseCursor)
 	}
 
-	// 下限で止まる
+	// 末尾で下 → 先頭へ折り返す
 	m, _ = updateModel(m, keyMsg("down"))
-	if m.browseCursor != 2 {
-		t.Errorf("expected cursor=2 at bottom, got %d", m.browseCursor)
+	if m.browseCursor != 0 {
+		t.Errorf("expected cursor=0 after wrapping down, got %d", m.browseCursor)
 	}
 
+	// 先頭で上 → 末尾へ折り返す
 	m, _ = updateModel(m, keyMsg("up"))
+	if m.browseCursor != 2 {
+		t.Errorf("expected cursor=2 after wrapping up, got %d", m.browseCursor)
+	}
+
+	m, _ = updateModel(m, keyMsg("k"))
 	if m.browseCursor != 1 {
-		t.Errorf("expected cursor=1 after up, got %d", m.browseCursor)
+		t.Errorf("expected cursor=1 after k, got %d", m.browseCursor)
 	}
 }
 
@@ -948,5 +954,56 @@ func TestStartReviewResetsSessionMisses(t *testing.T) {
 
 	if len(m.sessionMisses) != 0 {
 		t.Fatalf("expected misses reset on new session, got %d", len(m.sessionMisses))
+	}
+}
+
+func TestBrowseSearchFiltersByKanjiAndHiragana(t *testing.T) {
+	m := New()
+	m.screen = screenBrowse
+	yomi := "つき"
+	m.browseAll = []domain.Card{
+		{ID: "1", Kanji: "日曜日", English: "sunday"},
+		{ID: "2", Kanji: "月", Hiragana: &yomi, English: "moon"},
+		{ID: "3", Kanji: "火", English: "fire"},
+	}
+	m = m.applyBrowseFilter()
+
+	m, _ = updateModel(m, keyMsg("/"))
+	if !m.browseSearch {
+		t.Fatal("expected search mode after /")
+	}
+	// 検索中の q は入力として扱い、終了しない
+	m, _ = updateModel(m, keyMsg("q"))
+	if m.quitting {
+		t.Fatal("q should not quit while searching")
+	}
+	m, _ = updateModel(m, keyMsg("backspace"))
+
+	m, _ = updateModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("つ")})
+	if len(m.browseCards) != 1 || m.browseCards[0].ID != "2" {
+		t.Fatalf("expected hiragana match on 月, got %+v", m.browseCards)
+	}
+
+	m, _ = updateModel(m, keyMsg("esc"))
+	m, _ = updateModel(m, keyMsg("/"))
+	m, _ = updateModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("曜")})
+	if len(m.browseCards) != 1 || m.browseCards[0].ID != "1" {
+		t.Fatalf("expected kanji match on 日曜日, got %+v", m.browseCards)
+	}
+
+	// enter で絞り込みを保持したまま一覧操作へ
+	m, _ = updateModel(m, keyMsg("enter"))
+	if m.browseSearch || len(m.browseCards) != 1 {
+		t.Fatalf("expected filter kept after enter, got search=%v cards=%d", m.browseSearch, len(m.browseCards))
+	}
+
+	// esc で検索解除、もう一度 esc でメニューへ
+	m, _ = updateModel(m, keyMsg("esc"))
+	if len(m.browseCards) != 3 || m.screen != screenBrowse {
+		t.Fatalf("expected filter cleared, got %d cards on screen %v", len(m.browseCards), m.screen)
+	}
+	m, _ = updateModel(m, keyMsg("esc"))
+	if m.screen != screenMenu {
+		t.Fatalf("expected menu after second esc, got %v", m.screen)
 	}
 }

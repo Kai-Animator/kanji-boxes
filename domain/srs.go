@@ -60,6 +60,11 @@ func NextDueForBox(today LocalDate, box int) (LocalDate, error) {
 func ApplyReview(card Card, correct bool, answerDuration time.Duration, today LocalDate) (Card, error) {
 	updated := card
 	updated.Box = MoveBox(card.Box, correct, answerDuration)
+	if updated.Box > BoxMin {
+		updated.Relearning = false
+	} else if ClampBox(card.Box) > BoxMin {
+		updated.Relearning = true
+	}
 	updated.LastReviewed = &today
 	updated.ReviewCount++
 	if correct {
