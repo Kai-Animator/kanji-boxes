@@ -991,6 +991,14 @@ func TestBrowseSearchFiltersByKanjiAndHiragana(t *testing.T) {
 		t.Fatalf("expected kanji match on 日曜日, got %+v", m.browseCards)
 	}
 
+	// 英語は大文字小文字を区別せず一致
+	m, _ = updateModel(m, keyMsg("esc"))
+	m, _ = updateModel(m, keyMsg("/"))
+	m, _ = updateModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("MOO")})
+	if len(m.browseCards) != 1 || m.browseCards[0].ID != "2" {
+		t.Fatalf("expected english match on moon, got %+v", m.browseCards)
+	}
+
 	// enter で絞り込みを保持したまま一覧操作へ
 	m, _ = updateModel(m, keyMsg("enter"))
 	if m.browseSearch || len(m.browseCards) != 1 {

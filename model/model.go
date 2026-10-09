@@ -922,7 +922,7 @@ func (m Model) moveBrowseCursor(key string) Model {
 
 func (m Model) resetBrowseSearch() Model {
 	input := textinput.New()
-	input.Placeholder = "kanji or hiragana"
+	input.Placeholder = "kanji, hiragana or english"
 	input.CharLimit = 50
 	m.browseQuery = input
 	m.browseSearch = false
@@ -936,15 +936,18 @@ func (m Model) applyBrowseFilter() Model {
 	return m
 }
 
-// 漢字または読みに部分一致するカードを返す（空の検索語は全件）
+// 漢字・読み・英語に部分一致するカードを返す（空の検索語は全件、英語は大文字小文字を区別しない）
 func filterCards(cards []domain.Card, query string) []domain.Card {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return cards
 	}
+	lowerQuery := strings.ToLower(query)
 	filtered := make([]domain.Card, 0, len(cards))
 	for _, card := range cards {
-		if strings.Contains(card.Kanji, query) || (card.Hiragana != nil && strings.Contains(*card.Hiragana, query)) {
+		if strings.Contains(card.Kanji, query) ||
+			(card.Hiragana != nil && strings.Contains(*card.Hiragana, query)) ||
+			strings.Contains(strings.ToLower(card.English), lowerQuery) {
 			filtered = append(filtered, card)
 		}
 	}
