@@ -1,4 +1,4 @@
-module kanji-boxes
+module github.com/Kai-Animator/kanji-boxes
 
 go 1.25.5
 

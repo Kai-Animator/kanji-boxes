@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"kanji-boxes/model"
+	"github.com/Kai-Animator/kanji-boxes/model"
 )
 
 func main() {

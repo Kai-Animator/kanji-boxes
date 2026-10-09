@@ -58,6 +58,17 @@ make build
 
 ## Install
 
+With Go installed:
+
+```bash
+go install github.com/Kai-Animator/kanji-boxes@latest
+kanji-boxes
+```
+
+The binary lands in `$(go env GOPATH)/bin` (usually `~/go/bin`), which needs to be on your `PATH`.
+
+From a clone, `make install` builds the binary as `kanji-box` into `~/.local/bin`:
+
 ```bash
 make install
 export PATH="$HOME/.local/bin:$PATH"
@@ -157,8 +168,13 @@ Today's reviewed, correct and incorrect counts with an accuracy bar, plus a hist
 ```bash
 make test       # go test ./...
 make typecheck  # go build ./...
+make lint       # go vet ./...
 make coverage   # HTML coverage report
 make dev        # fmt, typecheck, test
 ```
 
 CI runs build and tests with the race detector on every push and pull request to `main`.
+
+## License
+
+[MIT](LICENSE)

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"kanji-boxes/domain"
+	"github.com/Kai-Animator/kanji-boxes/domain"
 )
 
 var csvHeader = []string{"kanji", "hiragana", "english", "usage", "tags", "box"}

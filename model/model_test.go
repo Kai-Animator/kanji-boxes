@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"kanji-boxes/domain"
-	"kanji-boxes/storage"
+	"github.com/Kai-Animator/kanji-boxes/domain"
+	"github.com/Kai-Animator/kanji-boxes/storage"
 )
 
 func TestStartReviewBuildsDueQueue(t *testing.T) {

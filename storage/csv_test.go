@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"kanji-boxes/domain"
+	"github.com/Kai-Animator/kanji-boxes/domain"
 )
 
 func TestExportCardsCSVHeaderAndTags(t *testing.T) {

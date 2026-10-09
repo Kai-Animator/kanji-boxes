@@ -1,6 +1,6 @@
 package storage
 
-import "kanji-boxes/domain"
+import "github.com/Kai-Animator/kanji-boxes/domain"
 
 type AppState struct {
 	SessionStats domain.SessionStats            `json:"sessionStats"`

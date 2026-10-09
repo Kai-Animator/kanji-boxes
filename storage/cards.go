@@ -1,6 +1,6 @@
 package storage
 
-import "kanji-boxes/domain"
+import "github.com/Kai-Animator/kanji-boxes/domain"
 
 func LoadCards(path string) ([]domain.Card, error) {
 	var cards []domain.Card

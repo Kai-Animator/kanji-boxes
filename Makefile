@@ -19,9 +19,9 @@ test:
 test-v:
 	go test -v ./...
 
-# リンター実行
+# 静的解析（golangci-lint は設定ごと廃止したため go vet を使用）
 lint:
-	golangci-lint run
+	go vet ./...
 
 # フォーマット
 fmt:

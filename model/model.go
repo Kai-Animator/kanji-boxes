@@ -14,9 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"kanji-boxes/domain"
-	"kanji-boxes/storage"
-	"kanji-boxes/ui/view"
+	"github.com/Kai-Animator/kanji-boxes/domain"
+	"github.com/Kai-Animator/kanji-boxes/storage"
+	"github.com/Kai-Animator/kanji-boxes/ui/view"
 )
 
 type screen int
