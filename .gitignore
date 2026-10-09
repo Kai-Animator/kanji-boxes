@@ -4,3 +4,6 @@ kanji-boxes
 
 # OS files
 .DS_Store
+
+# Personal card exports
+exported.csv
