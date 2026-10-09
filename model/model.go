@@ -85,9 +85,10 @@ type Model struct {
 	editID        string
 	state         storage.AppState
 	stateErr      error
-	stateWarning  string        // 保存失敗時の警告メッセージ
-	browseAll     []domain.Card // 絞り込み前の全カード
-	browseCards   []domain.Card // 検索で絞り込んだ表示用カード
+	stateWarning  string         // 保存失敗時の警告メッセージ
+	browseAll     []domain.Card  // 絞り込み前の全カード
+	browseCards   []domain.Card  // 検索で絞り込んだ表示用カード
+	browseWaiting map[string]int // ボックス1の枠待ちカードのIDと待ち順
 	browseErr     error
 	browseCursor  int
 	browseQuery   textinput.Model
@@ -655,6 +656,10 @@ func (m Model) browseView() string {
 		}
 		// ボックスレベルに応じた色でインジケーター表示
 		boxIndicator := view.BoxStyleForLevel(card.Box).Render(fmt.Sprintf("[%d]", card.Box))
+		if _, waiting := m.browseWaiting[card.ID]; waiting {
+			// 枠待ちのカードはまだボックスに入っていないため番号を出さない
+			boxIndicator = view.HintStyle.Render("[-]")
+		}
 		builder.WriteString(fmt.Sprintf("%s %s %s\n", cursor, boxIndicator, rowStyle.Render(fmt.Sprintf("%s - %s", card.Kanji, card.English))))
 	}
 
@@ -668,8 +673,13 @@ func (m Model) browseView() string {
 		builder.WriteString(view.LabelStyle.Render("Usage: ") + view.UsageStyle.Render(selected.Usage) + "\n")
 	}
 	boxStyle := view.BoxStyleForLevel(selected.Box)
-	builder.WriteString(view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
-	builder.WriteString(view.LabelStyle.Render("Next due: ") + view.ValueStyle.Render(selected.NextDue.String()) + "\n")
+	if position, waiting := m.browseWaiting[selected.ID]; waiting {
+		builder.WriteString(view.LabelStyle.Render("Box: ") + view.HintStyle.Render(fmt.Sprintf("waiting for a box 1 slot (#%d in line)", position)) + "\n")
+		builder.WriteString(view.LabelStyle.Render("Next due: ") + view.HintStyle.Render("when a slot opens") + "\n")
+	} else {
+		builder.WriteString(view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
+		builder.WriteString(view.LabelStyle.Render("Next due: ") + view.ValueStyle.Render(selected.NextDue.String()) + "\n")
+	}
 	if len(selected.Tags) > 0 {
 		builder.WriteString(view.LabelStyle.Render("Tags: ") + view.ValueStyle.Render(strings.Join(selected.Tags, ", ")) + "\n")
 	}
@@ -902,6 +912,7 @@ func (m Model) startBrowse() Model {
 
 	m.dataDir = dataDir
 	m.browseAll = cards
+	m.browseWaiting = domain.WaitingQueue(cards, domain.BoxOneCap)
 	m = m.applyBrowseFilter()
 	return m
 }

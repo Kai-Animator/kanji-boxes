@@ -31,6 +31,9 @@ func TestActiveCardsCapsBoxOneNewcomersByCreationOrder(t *testing.T) {
 	if waiting := WaitingCount(cards, 2); waiting != 1 {
 		t.Errorf("expected 1 waiting, got %d", waiting)
 	}
+	if position := WaitingQueue(cards, 2)["late"]; position != 1 {
+		t.Errorf("expected late to be #1 in line, got %d", position)
+	}
 }
 
 func TestActiveCardsFillsFreedSlot(t *testing.T) {

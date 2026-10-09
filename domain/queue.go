@@ -32,9 +32,21 @@ func DueCards(cards []Card, today LocalDate) []Card {
 const BoxOneCap = 20
 
 // ActiveCards はボックス1の新規カードを上限まで絞り込む。
-// 作成日順で固定の顔ぶれにし、昇格で空いた枠に次のカードが入る。
 // 再学習中のカードとボックス2以上のカードは常に含める
 func ActiveCards(cards []Card, limit int) []Card {
+	waiting := WaitingQueue(cards, limit)
+	active := make([]Card, 0, len(cards))
+	for _, card := range cards {
+		if _, ok := waiting[card.ID]; !ok {
+			active = append(active, card)
+		}
+	}
+	return active
+}
+
+// WaitingQueue は上限によりボックス1の枠を待つカードのIDと待ち順（1始まり）を返す。
+// 作成日順で固定の顔ぶれにし、昇格で空いた枠に次のカードが入る
+func WaitingQueue(cards []Card, limit int) map[string]int {
 	newcomers := make([]Card, 0, len(cards))
 	for _, card := range cards {
 		if isCappedNewcomer(card) {
@@ -47,32 +59,16 @@ func ActiveCards(cards []Card, limit int) []Card {
 		}
 		return strings.Compare(newcomers[i].ID, newcomers[j].ID) < 0
 	})
-	admitted := make(map[string]bool, limit)
-	for i := 0; i < len(newcomers) && i < limit; i++ {
-		admitted[newcomers[i].ID] = true
+	waiting := make(map[string]int)
+	for i := limit; i < len(newcomers); i++ {
+		waiting[newcomers[i].ID] = i - limit + 1
 	}
-
-	active := make([]Card, 0, len(cards))
-	for _, card := range cards {
-		if !isCappedNewcomer(card) || admitted[card.ID] {
-			active = append(active, card)
-		}
-	}
-	return active
+	return waiting
 }
 
 // WaitingCount は上限により待機中のボックス1カード数を返す
 func WaitingCount(cards []Card, limit int) int {
-	count := 0
-	for _, card := range cards {
-		if isCappedNewcomer(card) {
-			count++
-		}
-	}
-	if count <= limit {
-		return 0
-	}
-	return count - limit
+	return len(WaitingQueue(cards, limit))
 }
 
 func isCappedNewcomer(card Card) bool {

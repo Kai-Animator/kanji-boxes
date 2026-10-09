@@ -1015,3 +1015,16 @@ func TestBrowseSearchFiltersByKanjiAndHiragana(t *testing.T) {
 		t.Fatalf("expected menu after second esc, got %v", m.screen)
 	}
 }
+
+func TestBrowseViewMarksWaitingCards(t *testing.T) {
+	m := New()
+	m.screen = screenBrowse
+	m.browseAll = []domain.Card{{ID: "w", Kanji: "待", English: "wait", Box: 1}}
+	m.browseWaiting = map[string]int{"w": 3}
+	m = m.applyBrowseFilter()
+
+	out := m.browseView()
+	if !strings.Contains(out, "[-]") || !strings.Contains(out, "#3 in line") {
+		t.Errorf("expected waiting marker and position, got %q", out)
+	}
+}
