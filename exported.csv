@@ -1,28 +1,117 @@
 kanji,hiragana,english,usage,tags,box
-取得,シュトク,Obtained,,,2
-済み,ずみ,Done／Settled/ Arranged,,,5
-受講,じゅこう,Taught／Lesson,,,1
-未取得,みしゅとく,Not Obtained,,,5
-未受講,みじゅこう,Not Taught,,,4
-発生,Hassei,Occurrence,,,4
-研修,kenshuu,Training,,,5
-期限,Kigen,Deadline,,,4
-条件,Jouken,Conditions,,,3
-部署,Busho,Department,,,1
-役職,Yakushoku,Title,,,4
-拠点,Kyouten,Base,,,1
-不満,ふまん,Not satisfactory,不満の気持ちが強いとき使います,,1
-夫婦,ふうふ,Married couple,となりの夫婦、けんかばかりしているね。,,2
-告白,こくはく,Confess,告白しても拘(こだわ)られってばかりみたいです。,,2
-運命,うんめい,Destiny,まだ運命の人に出会ってないって言いました。,,1
-聞き飽きる,ききあきる,Get tired of hearing,先生同じ話ばっかりだね。聞き飽きるよね。,,3
-あせる,あせる,panic - rush,田中さうわさ話をしているところに、本人が来ちゃって、あせったよ。,,2
-刃物,はもの,"Cutlery, edged tools",刃物を使っているところに、話かけないで下さい,,2
-カンニング,カンニング,"to cheat, on a test or be smart",カンニングしていいたところに先生が見られてしまった,,2
-着信,ちゃくしん,incomming call,電車に乗ったところに着信来ました,,1
-納期,のうき,day of deliver,明日納期なので終わらせましょう,,2
-用件,ようけん,topic,急ぎの用件の時がどうすればいいですか。,,1
-高級,こうきゅう,"high end, luxury",高級な店,,1
-懐中電灯,かいちゅうでんとう,flashlight,懐中電灯持っていなかた時に自転車をのて警察怒られてしまいました。,,2
-考え事,かんがえごと,to think,考え事しているところです,,3
-数える,かぞえる,to count,数を数えっているところです,,2
+取得,しゅとく,"acquire / obtain (a license, data, leave)",,,3
+済み,ずみ,already done / completed (suffix: 確認済み),,,6
+受講,じゅこう,attend / take a course (as student),,,1
+未取得,みしゅとく,not yet obtained,,,5
+未受講,みじゅこう,course not yet taken,,,3
+発生,はっせい,occurrence (an error/incident arises),,,3
+研修,けんしゅう,training program (company onboarding),,,6
+期限,きげん,deadline / expiry date (validity limit),,,5
+条件,じょうけん,condition / requirement (if X then...),,,3
+部署,ぶしょ,department (org unit),,,6
+役職,やくしょく,job title / managerial position,,,3
+拠点,きょてん,base / office location (branch site),,,5
+不満,ふまん,dissatisfaction / discontent,給料に不満があります。,,4
+夫婦,ふうふ,Married couple,となりの夫婦、けんかばかりしているね。,,6
+告白,こくはく,confess (feelings / a secret),好きな人に告白したけど、断られてしまった。,,5
+運命,うんめい,Destiny,まだ運命の人に出会ってないって言いました。,,5
+聞き飽きる,ききあきる,Get tired of hearing,先生同じ話ばっかりだね。聞き飽きるよね。,,6
+あせる,あせる,panic / get flustered,田中さんのうわさ話をしているところに、本人が来ちゃって、あせったよ。,,5
+刃物,はもの,bladed tool / knife (anything with an edge),刃物を使っているところに、話しかけないでください。,,6
+カンニング,カンニング,cheat on a test,カンニングしているところを先生に見られてしまった。,,6
+着信,ちゃくしん,incoming call / message,電車に乗ったところに着信が来ました。,,3
+納期,のうき,delivery deadline (due date for work),明日が納期なので終わらせましょう。,,3
+用件,ようけん,business / matter to discuss (why you called),急ぎの用件のときはどうすればいいですか。,,6
+高級,こうきゅう,"high end, luxury",高級な店,,5
+懐中電灯,かいちゅうでんとう,flashlight,懐中電灯を持っていなかったので、夜に自転車に乗っていたら警察に怒られてしまいました。,,5
+考え事,かんがえごと,something on one's mind (n.),考え事しているところです,,6
+数える,かぞえる,to count,羊の数を数えているところです。,,6
+輸出する,ゆしゅつする,to export,日本は多くの製品を輸出しています。,経済|貿易|ビジネス,5
+機能,きのう,function / feature (of an app),このアプリは多くの機能があります。,technology|software|functionality,5
+更新系,こうしんけい,update/write operations (vs. read-only 参照系),更新系のAPIは権限チェックが必要です。,技術|ソフトウェア|システム,5
+昇順,しょうじゅん,ascending order,データを昇順に並べ替えてください。,数学|データ|順序,4
+降順,こうじゅん,descending order,データを降順に並べ替えました。,数学|データ|順序,3
+件数,けんすう,number of items / records (count),検索結果の件数は100件です。,ビジネス|統計|数量,5
+実装中,じっそうちゅう,being implemented (in progress),この機能は現在実装中です。,技術|開発|プログラミング,4
+仕組み,しくみ,mechanism / how something works,このアプリの仕組みを説明してください。,概念|構造|日本語,4
+事項,じこう,"matter / item (formal: 注意事項, 確認事項)",注意事項をよく読んでください。,ビジネス|法律|一般,4
+送信,そうしん,send (transmit electronically),メールを送信しました。,通信|技術|ビジネス,3
+仕込み,しこみ,"prep work (cooking, setup beforehand)",料理の仕込みをする必要があります。,,2
+縁,えん,fate / bond between people (ご縁),私たちは長い縁で結ばれています。,kanji|connection|relationship,5
+結ぶ,むすぶ,to tie,彼は靴のひもを結ぶのが得意です。,verb|action|tie,4
+法的,ほうてき,legal,法的な手続きが必要です。,法律|法的|手続き,5
+手続き,てつづき,procedure / paperwork (administrative),新しいビザを取得するための手続きをしました。,法律|ビザ|手続き,4
+氏名,しめい,"full name (formal, on forms)",彼の氏名は田中太郎です。,名前|個人情報,4
+併記,へいき,write side by side (e.g. name in kanji and romaji),氏名はローマ字を併記してください。,言語|文書|表現,4
+連携,れんけい,"integration / cooperation (systems, teams link up)",SlackとGitHubを連携しました。,ビジネス|コミュニケーション,5
+特権管理者,とっけんかんりしゃ,privileged administrator (super admin),特権管理者はシステムの全ての設定を変更できます。,IT|管理|特権,4
+制限,せいげん,restriction / limit (on usage),このAPIには回数の制限があります。,Noun|Formal|Legal,1
+保有,ほゆう,"hold / possess (assets, licenses, data)",彼は多くの資格を保有している。,財産|法律|経済,5
+目途,めど,prospect / outlook (目途が立つ = see the way to finish),このプロジェクトの目途が立ちました。,Noun|Goal|Project,5
+傾向,けいこう,tendency / trend,最近、若い人は車を買わない傾向がある。,Noun|Psychology|Behavior,1
+反省,はんせい,reflect on (own) mistakes,遅刻したことを反省しています。,self-reflection|introspection|personal|growth,2
+再発防止,さいはつぼうし,prevention of recurrence,再発防止のために、対策を講じる必要があります。,ビジネス|法務|安全,3
+複製,ふくせい,duplicate / copy (make a replica),このデータの複製を作成してください。,ビジネス|コンピュータ|データ,4
+情報,じょうほう,information,彼は最新の情報を持っています。,Noun|Technology|Communication,2
+原則,げんそく,principle / as a rule (原則として),原則として、遅刻は認めません。,法律|教育|倫理,1
+公開,こうかい,publish / make public (release),新しい製品は来週公開されます。,公開|発表|情報,3
+仕様,しよう,specification / spec (how it should behave),この機能の仕様を確認してください。,ビジネス|技術|製品,3
+並行,へいこう,in parallel / simultaneously,この二つのプロジェクトは並行して進められています。,ビジネス|プロジェクト|並行,4
+在籍,ざいせき,be enrolled / employed (on the roster),彼はこの会社に10年在籍しています。,education|administration|status,3
+所有,しょゆう,own (legal ownership of property),彼はこの土地を所有しています。,法律|経済|所有,2
+方針,ほうしん,policy / direction (organization's course of action),会社の方針を理解することが重要です。,ビジネス|方針|政策,1
+満足,まんぞく,satisfaction / satisfied,彼は仕事の結果に満足している。,感情|状態|名詞,5
+導入,どうにゅう,introduce / adopt (a new system),新しいシステムの導入が決まりました。,ビジネス|技術|プロジェクト,2
+提案,ていあん,proposal / suggestion,新しい提案を考えています。,ビジネス|コミュニケーション|アイデア,3
+日々,ひび,day by day / every day,日々の努力が大切です。,時間|生活|習慣,5
+懸念,けねん,concern / worry (about a risk),彼はその計画に懸念を示した。,emotion|worry|thought,2
+蓄積,ちくせき,accumulation / build-up (over time),データの蓄積は重要です。,nouns|abstract|data,1
+繰り返す,くりかえす,to repeat,彼は同じことを繰り返す。,verb|action|repetition,2
+加わる,くわわる,to join / be added (intransitive),新しいメンバーがチームに加わった。,動詞|過去形|参加,3
+先方,せんぽう,the other party,先方からの連絡を待っています。,ビジネス|会話,2
+特定,とくてい,identify / pinpoint (特定の = specific),エラーの原因を特定しました。,vocabulary|Noun|Formal,1
+数値,すうち,numeric value / figure,この数値は正確ですか？,数学|データ|数値,2
+復元,ふくげん,"restore (to original state, data or building)",削除したファイルを復元しました。,復元|日本語|建築|文化遺産,1
+下書き,したがき,draft (rough version),このレポートはまだ下書きです。,writing|drafting|documents,2
+正式,せいしき,official / formal (properly authorized),正式な書類が必要です。,formal|documents|official,1
+予約,よやく,reservation,レストランの予約をしました。,travel|dining|planning,2
+総合,そうごう,overall / comprehensive (integrating everything),総合的に判断しました。,ビジネス|教育|総合,1
+視点,してん,point of view / viewpoint (where you look from),彼の視点から見ると、問題は簡単だ。,視点|観点|考え方,1
+体験,たいけん,"(personal, hands-on) experience",初めての着物体験はとても楽しかった。,日本語|語彙|経験,1
+疑問,ぎもん,doubt / question (something unclear),その説明には疑問が残る。,質問|疑問|言葉,1
+感覚,かんかく,sense / feeling (perception),寒さで指の感覚がなくなった。,感覚|知覚|心理,1
+内部,ないぶ,inside / internal (part),この箱の内部はとても広いです。,位置|場所|名詞,1
+構造,こうぞう,structure / construction (physical or data),この建物の構造は非常に複雑です。,建築|構造|技術,1
+根幹,こんかん,core / foundation (most essential part),この計画の根幹は、持続可能な発展にあります。,ビジネス|環境|基本,1
+影響,えいきょう,influence / effect (impact),彼の意見は私に大きな影響を与えた。,名詞|感情|社会,1
+変化,へんか,"change (n., shift in state)",彼の態度は最近変化した。,名詞|変化|日本語,1
+当然,とうぜん,naturally / of course (expected),約束を守るのは当然です。,adverb|common,1
+納得,なっとく,be convinced / accept (an explanation),彼はその説明に納得した。,理解|感情|思考,1
+収支,しゅうし,income and expenditure (balance),彼の収支は毎月変動します。,finance|budget|economics,1
+儲ける,もうける,make money / profit (informal verb),彼は株で大金を儲けた。,finance|business|profit,1
+半端,はんぱ,half-done / incomplete (中途半端),中途半端な気持ちでは続かない。,日本語|単語|表現,1
+利益,りえき,"profit (formal, accounting)",会社は利益を上げるために努力しています。,経済|ビジネス|会計,1
+黒字,こくじ,in the black / surplus (opp. 赤字),今年の黒字は予想以上だった。,finance|economy|business,1
+方策,ほうさく,measure / plan of action (to solve a problem),問題を解決するための方策を考えましょう。,direction|method|way,1
+費用,ひよう,cost / expenses,このプロジェクトの費用は予算を超えました。,ビジネス|財務|経済,1
+持続,じぞく,sustain / continue (keep going over time),このペースを持続するのは難しい。,日本語|単語|動詞,1
+競争,きょうそう,competition / contest (the act of competing),この業界は競争が激しい。,競争|スポーツ|日本語,1
+優位,ゆうい,advantage / superiority (position),彼はその分野で優位に立っている。,ビジネス|競争|心理,1
+競合,きょうごう,competitor (rival company) / conflict,競合他社の価格を調べてください。,ビジネス|競争|経済,1
+他社,たしゃ,other companies,彼は他社の製品を比較しています。,business|companies|comparison,1
+手厚い,てあつい,"generous / attentive (care, support)",彼は手厚いサポートを提供してくれた。,形容詞|感謝|サポート,1
+項目,こうもく,item / field (in a list or form),入力項目をすべて埋めてください。,ビジネス|リスト|情報,1
+直感,ちょっかん,intuition / gut feeling,彼女の直感はいつも正しい。,感覚|心理|直感,1
+基準,きじゅん,standard / criteria (benchmark to judge by),採用の基準を明確にしてください。,基準|標準|規範,1
+就業,しゅうぎょう,employment / working (就業規則 = work rules),就業時間は9時から18時までです。,ビジネス|労務,1
+推測,すいそく,guess / speculate (infer from clues),彼の気持ちを推測するのは難しい。,推測|言葉|感情,1
+分析,ぶんせき,analysis / analyze,データを分析する必要があります。,学問|ビジネス|データ,1
+一致,いっち,match / agree (be identical),パスワードが一致しません。,合意|同意|一致,1
+特徴,とくちょう,characteristic / distinctive feature,彼の特徴は彼の優れたコミュニケーション能力です。,Noun|Trait|Description,1
+資料,しりょう,"materials / documents (handouts, reference)",この資料を使ってプレゼンテーションを作成します。,教育|ビジネス|文書,1
+募集人,ぼしゅうにん,(insurance) sales agent / solicitor,保険の募集人として登録しました。,仕事|人|募集,1
+意向把握,いこうはあく,grasp the customer's intentions,契約前に顧客の意向把握を行います。,ビジネス|コミュニケーション,1
+継続,けいぞく,"continuation / continue (keep doing, not stop)",契約を継続しますか？,Noun|Project|Business,1
+篤実,とくじつ,sincere and kind-hearted,彼は篤実な人だから、誰からも信頼されています。,性格|誠実|日本語,1
+技能,ぎのう,skill / technique (practical ability),彼は多くの技能を持っています。,能力|職業|教育,1
+知識,ちしき,knowledge (what you know),彼は豊富な知識を持っています。,学問|情報|理解,1
