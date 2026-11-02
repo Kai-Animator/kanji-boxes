@@ -69,10 +69,13 @@ type Model struct {
 	reviewOrder   []int
 	reviewIndex   int
 	reviewCardAt  time.Time
+	reviewFlipAt  time.Time // 初回に裏返した時刻。想起時間はここまでで計る
 	reveal        bool
 	reviewErr     error
 	session       domain.SessionStats
 	sessionMisses []domain.Card // 今回のセッションで不正解だったカード
+	sessionSlow   []domain.Card // 正解したが速度不足で昇格しなかったカード
+	lastFeedback  string        // 直前の回答に対する補足（遅い正解など）
 	reviewWaiting int           // ボックス1の上限で待機中のカード数
 	rng           *rand.Rand
 	addInputs     []textinput.Model
@@ -201,7 +204,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.screen = screenMenu
 			case " ":
-				m.reveal = !m.reveal
+				m = m.flipCard()
 			case "y":
 				if m.reviewIndex < len(m.reviewOrder) {
 					m = m.applyAnswer(true)
@@ -209,6 +212,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "n":
 				if m.reviewIndex < len(m.reviewOrder) {
 					m = m.applyAnswer(false)
+				}
+			case "s":
+				if m.reviewIndex < len(m.reviewOrder) {
+					m = m.suspendCurrentCard()
 				}
 			}
 		case screenStats:
@@ -284,6 +291,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				if len(m.browseCards) > 0 {
 					m.screen = screenDeleteConfirm
+				}
+			case "s":
+				if len(m.browseCards) > 0 {
+					m = m.toggleSuspendSelected()
 				}
 			}
 		case screenImportExport:
@@ -437,14 +448,27 @@ func (m Model) reviewView() string {
 			builder.WriteString(view.LabelStyle.Render("Correct: ") + view.CorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Correct)) + " | ")
 			builder.WriteString(view.LabelStyle.Render("Incorrect: ") + view.IncorrectStatStyle.Render(fmt.Sprintf("%d", m.session.Incorrect)) + "\n")
 			builder.WriteString(m.missedCardsView())
+			builder.WriteString(m.slowCardsView())
 		} else {
 			card := m.reviewQueue[m.reviewIndex]
+
+			if m.lastFeedback != "" {
+				builder.WriteString(view.HintStyle.Render(m.lastFeedback) + "\n\n")
+			}
 
 			// レビューモードバッジ表示
 			modeBadge := m.reviewModeBadge()
 			boxStyle := view.BoxStyleForLevel(card.Box)
-			builder.WriteString(modeBadge + " " + view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", card.Box)) + "\n\n")
-			builder.WriteString(view.LabelStyle.Render("Elapsed: ") + view.ValueStyle.Render(formatElapsed(m.currentElapsed())) + " " + view.HintStyle.Render("(<=3s advances)") + "\n\n")
+			builder.WriteString(modeBadge + " " + view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", card.Box)) + "\n")
+			if domain.IsLeech(card) {
+				builder.WriteString(view.ErrorStyle.Render(fmt.Sprintf("Leech: %d reviews, %d%% correct. Add a usage sentence or press s to suspend.", card.ReviewCount, domain.AccuracyPercent(card))) + "\n")
+			}
+			builder.WriteString("\n")
+			speedHint := "(<=3s to flip advances)"
+			if !domain.SpeedGateApplies(card.Box) {
+				speedHint = "(no speed gate in box 1)"
+			}
+			builder.WriteString(view.LabelStyle.Render("Elapsed: ") + view.ValueStyle.Render(formatElapsed(m.currentElapsed())) + " " + view.HintStyle.Render(speedHint) + "\n\n")
 
 			switch m.currentReviewMode() {
 			case reviewModeProduction:
@@ -494,7 +518,7 @@ func (m Model) reviewView() string {
 	}
 
 	builder.WriteString("\n")
-	builder.WriteString(view.HintStyle.Render("space: flip • y: correct • n: incorrect • esc: back • q: quit") + "\n")
+	builder.WriteString(view.HintStyle.Render("space: flip • y: correct • n: incorrect • s: suspend • esc: back • q: quit") + "\n")
 
 	return builder.String()
 }
@@ -660,7 +684,14 @@ func (m Model) browseView() string {
 			// 枠待ちのカードはまだボックスに入っていないため番号を出さない
 			boxIndicator = view.HintStyle.Render("[-]")
 		}
-		builder.WriteString(fmt.Sprintf("%s %s %s\n", cursor, boxIndicator, rowStyle.Render(fmt.Sprintf("%s - %s", card.Kanji, card.English))))
+		if card.Suspended {
+			boxIndicator = view.HintStyle.Render("[S]")
+		}
+		row := fmt.Sprintf("%s - %s", card.Kanji, card.English)
+		if domain.IsLeech(card) {
+			row += " " + view.ErrorStyle.Render("leech")
+		}
+		builder.WriteString(fmt.Sprintf("%s %s %s\n", cursor, boxIndicator, rowStyle.Render(row)))
 	}
 
 	selected := m.browseCards[m.browseCursor]
@@ -680,6 +711,12 @@ func (m Model) browseView() string {
 		builder.WriteString(view.LabelStyle.Render("Box: ") + boxStyle.Render(fmt.Sprintf("%d", selected.Box)) + "\n")
 		builder.WriteString(view.LabelStyle.Render("Next due: ") + view.ValueStyle.Render(selected.NextDue.String()) + "\n")
 	}
+	if selected.ReviewCount > 0 {
+		builder.WriteString(view.LabelStyle.Render("Accuracy: ") + view.ValueStyle.Render(fmt.Sprintf("%d%% correct over %d reviews", domain.AccuracyPercent(selected), selected.ReviewCount)) + "\n")
+	}
+	if selected.Suspended {
+		builder.WriteString(view.LabelStyle.Render("Status: ") + view.HintStyle.Render("suspended (press s to resume)") + "\n")
+	}
 	if len(selected.Tags) > 0 {
 		builder.WriteString(view.LabelStyle.Render("Tags: ") + view.ValueStyle.Render(strings.Join(selected.Tags, ", ")) + "\n")
 	}
@@ -694,9 +731,9 @@ func (m Model) browseHint() string {
 		return "type to filter • up/down: move • enter: done • esc: clear"
 	}
 	if m.browseQuery.Value() != "" {
-		return "up/down: move • /: search • e: edit • d: delete • esc: clear search • q: quit"
+		return "up/down: move • /: search • e: edit • s: suspend • d: delete • esc: clear search • q: quit"
 	}
-	return "up/down: move • /: search • e: edit • d: delete • esc: back • q: quit"
+	return "up/down: move • /: search • e: edit • s: suspend • d: delete • esc: back • q: quit"
 }
 
 func (m Model) editCardView() string {
@@ -817,9 +854,12 @@ func (m Model) startReview() Model {
 	m.reviewOrder = indicesForCards(cards, m.reviewQueue)
 	m.reviewIndex = 0
 	m.reviewCardAt = m.now()
+	m.reviewFlipAt = time.Time{}
 	m.reveal = false
 	m.stateWarning = ""
 	m.sessionMisses = nil
+	m.sessionSlow = nil
+	m.lastFeedback = ""
 	m.session = m.state.DailyStats[domain.Today().String()]
 	if err := storage.SaveState(storage.StatePath(dataDir), m.state); err != nil {
 		m.stateWarning = "Warning: Failed to save state"
@@ -1356,6 +1396,27 @@ func shuffleWithinDueGroups(cards []domain.Card, rng *rand.Rand) []domain.Card {
 	return result
 }
 
+// slowCardsView はセッション完了画面に、正解したが遅くて昇格しなかったカードを描画する
+func (m Model) slowCardsView() string {
+	if len(m.sessionSlow) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString("\n")
+	builder.WriteString(view.SubtitleStyle.Render(fmt.Sprintf("Correct but slow (%d)", len(m.sessionSlow))) + "\n")
+	builder.WriteString(view.DividerStyle.Render(strings.Repeat("─", 24)) + "\n")
+	for _, card := range m.sessionSlow {
+		line := view.KanjiStyle.Render(card.Kanji)
+		if card.Hiragana != nil && *card.Hiragana != "" {
+			line += " " + view.HiraganaStyle.Render(*card.Hiragana)
+		}
+		line += "  " + view.ValueStyle.Render(card.English)
+		line += "  " + view.LabelStyle.Render("Box ") + view.BoxStyleForLevel(card.Box).Render(fmt.Sprintf("%d", card.Box))
+		builder.WriteString(line + "\n")
+	}
+	return builder.String()
+}
+
 // missedCardsView はセッション完了画面に不正解カードの一覧を描画する
 func (m Model) missedCardsView() string {
 	var builder strings.Builder
@@ -1387,17 +1448,18 @@ func (m Model) missedCardsView() string {
 func (m Model) applyAnswer(correct bool) Model {
 	idx := m.reviewOrder[m.reviewIndex]
 	answeredAt := m.now()
-	answerDuration := time.Duration(0)
-	if !m.reviewCardAt.IsZero() {
-		answerDuration = answeredAt.Sub(m.reviewCardAt)
-		if answerDuration < 0 {
-			answerDuration = 0
-		}
-	}
-	updated, err := domain.ApplyReview(m.cards[idx], correct, answerDuration, domain.Today())
+	// 想起にかかった時間だけを測る。裏返した後の確認時間は含めない
+	answerDuration := m.currentElapsed()
+	previous := m.cards[idx]
+	updated, err := domain.ApplyReview(previous, correct, answerDuration, domain.Today())
 	if err != nil {
 		m.reviewErr = err
 		return m
+	}
+	m.lastFeedback = ""
+	if domain.IsSlowCorrect(previous.Box, correct, answerDuration) {
+		m.sessionSlow = append(m.sessionSlow, updated)
+		m.lastFeedback = fmt.Sprintf("Correct but slow (%s): %s stays in box %d", formatElapsed(answerDuration), updated.Kanji, updated.Box)
 	}
 
 	m.cards[idx] = updated
@@ -1424,7 +1486,64 @@ func (m Model) applyAnswer(correct bool) Model {
 
 	m.reviewIndex++
 	m.reviewCardAt = answeredAt
+	m.reviewFlipAt = time.Time{}
 	m.reveal = false
+	return m
+}
+
+// flipCard は表裏を切り替え、初回の裏返し時刻を記録する
+func (m Model) flipCard() Model {
+	if !m.reveal && m.reviewFlipAt.IsZero() {
+		m.reviewFlipAt = m.now()
+	}
+	m.reveal = !m.reveal
+	return m
+}
+
+// suspendCurrentCard は出題中のカードを停止して保存し、採点せずに次へ進む
+func (m Model) suspendCurrentCard() Model {
+	idx := m.reviewOrder[m.reviewIndex]
+	m.cards[idx].Suspended = true
+	m.reviewQueue[m.reviewIndex] = m.cards[idx]
+	if err := storage.SaveCards(storage.CardsPath(m.dataDir), m.cards); err != nil {
+		m.reviewErr = err
+		return m
+	}
+	m.lastFeedback = fmt.Sprintf("Suspended %s. Unsuspend from Browse with s.", m.cards[idx].Kanji)
+	m.reviewIndex++
+	m.reviewCardAt = m.now()
+	m.reviewFlipAt = time.Time{}
+	m.reveal = false
+	return m
+}
+
+// toggleSuspendSelected はブラウズで選択中のカードの停止状態を切り替えて保存する
+func (m Model) toggleSuspendSelected() Model {
+	dataDir, err := storage.ResolveDataDir("")
+	if err != nil {
+		m.browseErr = err
+		return m
+	}
+	targetID := m.browseCards[m.browseCursor].ID
+	cards, err := storage.LoadCards(storage.CardsPath(dataDir))
+	if err != nil {
+		m.browseErr = err
+		return m
+	}
+	for i := range cards {
+		if cards[i].ID == targetID {
+			cards[i].Suspended = !cards[i].Suspended
+		}
+	}
+	if err := storage.SaveCards(storage.CardsPath(dataDir), cards); err != nil {
+		m.browseErr = err
+		return m
+	}
+	cursor := m.browseCursor
+	m = m.startBrowse()
+	if cursor < len(m.browseCards) {
+		m.browseCursor = cursor
+	}
 	return m
 }
 
@@ -1443,7 +1562,11 @@ func (m Model) currentElapsed() time.Duration {
 	if m.now != nil {
 		now = m.now
 	}
-	elapsed := now().Sub(m.reviewCardAt)
+	end := now()
+	if !m.reviewFlipAt.IsZero() {
+		end = m.reviewFlipAt
+	}
+	elapsed := end.Sub(m.reviewCardAt)
 	if elapsed < 0 {
 		return 0
 	}

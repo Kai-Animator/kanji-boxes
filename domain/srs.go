@@ -21,6 +21,21 @@ var boxIntervalsByLevel = map[int]int{
 
 const FastAnswerThreshold = 3 * time.Second
 
+// SpeedGateApplies は正解時に速度で昇格を制限するボックスかを返す。
+// ボックス1は学習段階なので速度を問わず、定着を測るボックス2以降だけ速度を見る
+func SpeedGateApplies(box int) bool {
+	return ClampBox(box) > BoxMin
+}
+
+// IsSlowCorrect は正解したが速度不足で昇格しなかった回答かを返す
+func IsSlowCorrect(box int, correct bool, answerDuration time.Duration) bool {
+	current := ClampBox(box)
+	if !correct || current >= BoxMax || !SpeedGateApplies(current) {
+		return false
+	}
+	return answerDuration > FastAnswerThreshold
+}
+
 func ClampBox(box int) int {
 	if box < BoxMin {
 		return BoxMin
@@ -41,7 +56,7 @@ func BoxIntervalDays(box int) int {
 func MoveBox(box int, correct bool, answerDuration time.Duration) int {
 	current := ClampBox(box)
 	if correct {
-		if answerDuration > FastAnswerThreshold {
+		if IsSlowCorrect(current, correct, answerDuration) {
 			return current
 		}
 		return ClampBox(current + 1)

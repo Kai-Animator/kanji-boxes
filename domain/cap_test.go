@@ -79,3 +79,26 @@ func TestApplyReviewTracksRelearning(t *testing.T) {
 		t.Error("new box 1 miss should not be relearning")
 	}
 }
+
+func TestBoxOneCapIsTen(t *testing.T) {
+	// 1日間隔のボックス1を毎日無理なく回せる枚数
+	if BoxOneCap != 10 {
+		t.Fatalf("expected cap 10, got %d", BoxOneCap)
+	}
+}
+
+func TestSuspendedCardsAreNeverActive(t *testing.T) {
+	cards := []Card{
+		{ID: "susp", Box: 1, Suspended: true, CreatedAt: mustDate(t, "2026-10-01")},
+		{ID: "new", Box: 1, CreatedAt: mustDate(t, "2026-10-02")},
+		{ID: "susp3", Box: 3, Suspended: true, CreatedAt: mustDate(t, "2026-10-01")},
+	}
+	active := ActiveCards(cards, 1)
+	if len(active) != 1 || active[0].ID != "new" {
+		t.Fatalf("expected only the unsuspended card, got %+v", active)
+	}
+	// 停止中のカードは上限の枠を占有しない
+	if WaitingCount(cards, 1) != 0 {
+		t.Fatal("suspended card should not push others into the waiting line")
+	}
+}

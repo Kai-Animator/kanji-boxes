@@ -28,8 +28,8 @@ func DueCards(cards []Card, today LocalDate) []Card {
 }
 
 // ボックス1で同時に学習する新規カードの上限。
-// Leitner は区画を枚数ではなく物理的な幅で定めていたため、一日で無理なく回せる枚数として設定
-const BoxOneCap = 20
+// ボックス1は1日間隔なので、再学習カードと合わせても毎日回し切れる枚数に抑える
+const BoxOneCap = 10
 
 // ActiveCards はボックス1の新規カードを上限まで絞り込む。
 // 再学習中のカードとボックス2以上のカードは常に含める
@@ -37,6 +37,9 @@ func ActiveCards(cards []Card, limit int) []Card {
 	waiting := WaitingQueue(cards, limit)
 	active := make([]Card, 0, len(cards))
 	for _, card := range cards {
+		if card.Suspended {
+			continue
+		}
 		if _, ok := waiting[card.ID]; !ok {
 			active = append(active, card)
 		}
@@ -72,5 +75,5 @@ func WaitingCount(cards []Card, limit int) int {
 }
 
 func isCappedNewcomer(card Card) bool {
-	return ClampBox(card.Box) == BoxMin && !card.Relearning
+	return !card.Suspended && ClampBox(card.Box) == BoxMin && !card.Relearning
 }

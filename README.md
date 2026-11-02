@@ -19,8 +19,9 @@ Cards move through 6 boxes. A correct answer moves a card up one box, a wrong an
 | 5   | 30 days  |
 | 6   | 60 days  |
 
-- **Answer speed counts.** A correct answer only promotes the card if you answer within 3 seconds of the card appearing. A slower correct answer keeps the card in its current box and reschedules it at that box's interval. The review screen shows a live elapsed timer.
-- **Box 1 is capped at 20 new cards.** Extra new cards wait in line, ordered by creation date. When a card is promoted out of box 1, the next card in line takes its slot. Cards that fell back to box 1 from a higher box (relearning) don't count toward the cap and are always reviewed.
+- **Recall speed counts from box 2 up.** The clock starts when the card appears and stops when you flip it. A correct answer promotes the card only if you flipped within 3 seconds. A slower correct answer keeps the card in its current box, reschedules it at that box's interval, and is reported as "correct but slow" on the next card and at the end of the session. Box 1 has no speed gate: any correct answer moves the card to box 2.
+- **Box 1 is capped at 10 new cards.** Extra new cards wait in line, ordered by creation date. When a card is promoted out of box 1, the next card in line takes its slot. Cards that fell back to box 1 from a higher box (relearning) don't count toward the cap and are always reviewed.
+- **Leeches.** A card with 8 or more reviews and under 40% accuracy is flagged as a leech in Review and Browse. Add a usage sentence to give it context, or suspend it. Suspended cards are skipped in review and don't occupy a box 1 slot.
 - **Due order.** The review queue starts with the most overdue cards. Cards due on the same day are shuffled so you can't memorize them by position.
 
 ## Review modes
@@ -35,7 +36,7 @@ Each due card gets a random mode for the session:
 
 Cloze falls back to showing the kanji when a card has no usage sentence.
 
-When a session ends, the app lists every card you missed with its reading, meaning, new box and usage sentence.
+When a session ends, the app lists every card you missed with its reading, meaning, new box and usage sentence, followed by the cards you got right but too slowly to promote.
 
 ## Requirements
 
@@ -113,9 +114,10 @@ Review, Add Card, Browse, Import / Export, Stats, Quit.
 
 The header shows due cards, progress, and how many new cards are waiting for a box 1 slot.
 
-- `space`: flip card
+- `space`: flip card (stops the recall timer)
 - `y`: correct
 - `n`: incorrect
+- `s`: suspend the current card and skip it
 - `esc`: back to menu
 
 ### Add card
@@ -132,11 +134,12 @@ AI autofill calls OpenAI (`gpt-4o-mini`) and needs `OPENAI_API_KEY` set in your 
 
 ### Browse
 
-Lists all cards with their box number and a details pane for the selected card. Cards waiting for a box 1 slot show `[-]` and their position in line instead of a box and due date.
+Lists all cards with their box number and a details pane for the selected card. Cards waiting for a box 1 slot show `[-]` and their position in line instead of a box and due date. Suspended cards show `[S]`, and leeches are tagged `leech`. The details pane shows accuracy over all reviews.
 
 - `up/down` or `k/j`: move (wraps around at either end)
 - `/`: search by kanji, hiragana or English (English is case-insensitive)
 - `e`: edit selected card
+- `s`: suspend or resume selected card
 - `d`: delete selected card (asks `y/n`)
 - `esc`: clear the search, or go back to the menu
 

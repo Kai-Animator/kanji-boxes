@@ -118,3 +118,42 @@ func TestApplyReviewCorrectSlowStaysInSameBox(t *testing.T) {
 		t.Fatalf("expected nextDue 2026-02-07, got %s", updated.NextDue.String())
 	}
 }
+
+func TestMoveBoxIgnoresSpeedInBoxOne(t *testing.T) {
+	// ボックス1は学習段階なので速度に関係なく正解で昇格する
+	if got := MoveBox(1, true, 10*time.Second); got != 2 {
+		t.Fatalf("expected slow correct in box 1 to reach box 2, got %d", got)
+	}
+	if got := MoveBox(2, true, 10*time.Second); got != 2 {
+		t.Fatalf("expected slow correct in box 2 to stay, got %d", got)
+	}
+}
+
+func TestSpeedGateApplies(t *testing.T) {
+	if SpeedGateApplies(1) {
+		t.Fatal("expected no speed gate in box 1")
+	}
+	for box := 2; box <= BoxMax; box++ {
+		if !SpeedGateApplies(box) {
+			t.Fatalf("expected speed gate in box %d", box)
+		}
+	}
+}
+
+func TestIsSlowCorrect(t *testing.T) {
+	if !IsSlowCorrect(2, true, 4*time.Second) {
+		t.Fatal("expected slow correct in box 2")
+	}
+	if IsSlowCorrect(2, true, 2*time.Second) {
+		t.Fatal("fast correct is not slow")
+	}
+	if IsSlowCorrect(2, false, 10*time.Second) {
+		t.Fatal("incorrect is never slow correct")
+	}
+	if IsSlowCorrect(1, true, 10*time.Second) {
+		t.Fatal("box 1 has no speed gate")
+	}
+	if IsSlowCorrect(BoxMax, true, 10*time.Second) {
+		t.Fatal("box 6 cannot advance, so slowness changes nothing")
+	}
+}

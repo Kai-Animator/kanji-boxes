@@ -135,7 +135,7 @@ func TestReviewViewClozeMode(t *testing.T) {
 
 func TestReviewViewShowsElapsedTime(t *testing.T) {
 	hiragana := "にち"
-	card := domain.Card{Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。"}
+	card := domain.Card{Kanji: "日", Hiragana: &hiragana, English: "day", Usage: "日が昇る。", Box: 2}
 
 	start := time.Date(2026, 2, 4, 12, 0, 0, 0, time.UTC)
 	m := New()
@@ -152,7 +152,7 @@ func TestReviewViewShowsElapsedTime(t *testing.T) {
 	if !strings.Contains(view, "2.5s") {
 		t.Fatalf("expected formatted elapsed time, got %q", view)
 	}
-	if !strings.Contains(view, "<=3s advances") {
+	if !strings.Contains(view, "<=3s to flip advances") {
 		t.Fatalf("expected elapsed threshold hint, got %q", view)
 	}
 }
